@@ -13,10 +13,10 @@ This app transforms your Android device into a full-featured riding companion wi
 
 2. **Dynamic Telemetry Display**
     - Real-time monitoring of:
-    - Speed (GPS based)
-    - Altitude (meters)
-    - Compass heading (N, NE, E, etc.)
-    - GPS satellite count and fix status
+        - Speed (GPS based)
+        - Altitude (meters)
+        - Compass heading (N, NE, E, etc.)
+        - GPS satellite count and fix status
 
 3. **Lean & Pitch Gauges**
     - Lean Angle: Track cornering performance
