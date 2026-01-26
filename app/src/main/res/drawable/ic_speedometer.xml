@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Dark Blue Background Circle -->
+    <path
+        android:fillColor="#0D325E"
+        android:pathData="M54,54m-52,0a52,52 0,1 1,104 0a52,52 0,1 1,-104 0"/>
+
+    <!-- Main Silver Scale Ring (Arc) -->
+    <path
+        android:strokeColor="#E0E0E0"
+        android:strokeWidth="6"
+        android:strokeLineCap="butt"
+        android:pathData="M25,80 A35,35 0 1 1 83,80" />
+
+    <!-- Red Warning Segments (Drawn individually to avoid strokeDashArray error) -->
+    <path
+        android:strokeColor="#B22222"
+        android:strokeWidth="6"
+        android:pathData="M83,80 A35,35 0 0 0 84.5,74 M86,68 A35,35 0 0 0 87,62 M87.8,56 A35,35 0 0 0 88,54" />
+
+    <!-- White Ticks -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:pathData="M25,80 l4,-4 M20,54 l5,0 M25,28 l4,4 M54,19 l0,5 M83,28 l-4,4 M88,54 l-5,0" />
+
+    <!-- Central Hub (Silver Metal) -->
+    <path
+        android:fillColor="#C0C0C0"
+        android:pathData="M54,54m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0"/>
+    <path
+        android:fillColor="#707070"
+        android:pathData="M54,54m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0"/>
+
+    <!-- Sharp Red Needle -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M54,54 L78,30 L81,33 L54,54 Z"/>
+
+    <!-- "SPEEDSTER" Text Representation -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,92 h2 v1 h-2 z M39,92 h2 v1 h-2 z M43,92 h2 v1 h-2 z M47,92 h2 v1 h-2 z M51,92 h2 v1 h-2 z M55,92 h2 v1 h-2 z M59,92 h2 v1 h-2 z M63,92 h2 v1 h-2 z M67,92 h2 v1 h-2 z M71,92 h2 v1 h-2 z" />
+</vector>

@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="800dp"
+    android:viewportWidth="400"
+    android:viewportHeight="800">
+    <!-- Subtle technical grid -->
+    <path
+        android:pathData="M0,100 L400,100 M0,200 L400,200 M0,300 L400,300 M0,400 L400,400 M0,500 L400,500 M0,600 L400,600 M0,700 L400,700"
+        android:strokeColor="#08FFFFFF"
+        android:strokeWidth="0.5" />
+    <path
+        android:pathData="M100,0 L100,800 M200,0 L200,800 M300,0 L300,800"
+        android:strokeColor="#08FFFFFF"
+        android:strokeWidth="0.5" />
+
+    <!-- Diagonal 'Carbon' lines - just a few large ones for technical feel -->
+    <path
+        android:pathData="M-100,100 L100,-100 M0,200 L200,0 M100,300 L300,100 M200,400 L400,200 M300,500 L500,300"
+        android:strokeColor="#05FFFFFF"
+        android:strokeWidth="20" />
+
+    <!-- Corner Accents -->
+    <path
+        android:pathData="M20,20 L60,20 M20,20 L20,60"
+        android:strokeColor="#1AFFFFFF"
+        android:strokeWidth="2" />
+    <path
+        android:pathData="M380,20 L340,20 M380,20 L380,60"
+        android:strokeColor="#1AFFFFFF"
+        android:strokeWidth="2" />
+    <path
+        android:pathData="M20,780 L60,780 M20,780 L20,740"
+        android:strokeColor="#1AFFFFFF"
+        android:strokeWidth="2" />
+    <path
+        android:pathData="M380,780 L340,780 M380,780 L380,740"
+        android:strokeColor="#1AFFFFFF"
+        android:strokeWidth="2" />
+</vector>

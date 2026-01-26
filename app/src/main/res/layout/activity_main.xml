@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dashboard_combined_bg">
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guide_bottom"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.85" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guide_left_edge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.02" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guide_right_edge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.98" />
+
+    <!-- BMW GS Curved Segmented Meter -->
+    <com.example.gsmeter.GSSpeedometerView
+        android:id="@+id/gs_meter_view"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="10dp"
+        app:layout_constraintBottom_toTopOf="@+id/guide_bottom"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Media Controls & Fullscreen Toggle -->
+    <LinearLayout
+        android:id="@+id/media_controls_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="2dp"
+        android:paddingHorizontal="8dp"
+        android:background="@drawable/telemetry_bg"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="@+id/guide_left_edge">
+
+        <ImageButton
+            android:id="@+id/btn_info"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_dialog_info"
+            android:contentDescription="Info"
+            android:tint="@color/white"
+            android:scaleType="fitCenter"/>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:layout_marginHorizontal="4dp"
+            android:background="#40FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btn_toggle_ui"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_fullscreen"
+            android:contentDescription="Toggle Fullscreen"
+            android:alpha="0.7"
+            android:scaleType="fitCenter"/>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:layout_marginHorizontal="4dp"
+            android:background="#40FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btn_music_app"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_music_note"
+            android:contentDescription="Open YouTube Music"
+            android:tint="@color/white"
+            android:scaleType="fitCenter"/>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="12dp"
+            android:layout_marginHorizontal="4dp"
+            android:background="#40FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btn_media_prev"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginEnd="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_previous"
+            android:contentDescription="Previous"
+            android:tint="@color/white"
+            android:scaleType="fitCenter"/>
+
+        <ImageButton
+            android:id="@+id/btn_media_play_pause"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_play"
+            android:contentDescription="Play/Pause"
+            android:tint="@color/white"
+            android:scaleType="fitCenter"/>
+
+        <ImageButton
+            android:id="@+id/btn_media_next"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_next"
+            android:contentDescription="Next"
+            android:tint="@color/white"
+            android:scaleType="fitCenter"/>
+    </LinearLayout>
+
+    <!-- Info Card (Toggled by Info Button) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#CC000000"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/media_controls_container"
+        app:layout_constraintStart_toStartOf="@+id/media_controls_container">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Auto-Lock Toggle Moved to Top -->
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_auto_lock"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Auto Lock on Exit"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:fontFamily="@font/bmw_font_bold"
+                android:checked="false"
+                app:thumbTint="@color/teal_200"
+                app:trackTint="#80FFFFFF" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginVertical="8dp"
+                android:background="#40FFFFFF" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Made with pride for Riders by"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:fontFamily="@font/bmw_font_bold" />
+
+            <TextView
+                android:id="@+id/tv_info_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pratik Kumar"
+                android:textColor="#3DBCDB"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:fontFamily="@font/bmw_font_bold"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/tv_info_youtube"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="YouTube Channel : @SleepyVoyager"
+                android:textColor="#3DBCDB"
+                android:textSize="14sp"
+                android:layout_marginTop="8dp"
+                android:fontFamily="@font/bmw_font_bold"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_info_instagram"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Instagram : SleepyVoyager"
+                android:textColor="#3DBCDB"
+                android:textSize="14sp"
+                android:layout_marginTop="4dp"
+                android:fontFamily="@font/bmw_font_bold"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Session Stats -->
+    <LinearLayout
+        android:id="@+id/session_stats_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="@drawable/telemetry_bg"
+        app:layout_constraintBottom_toTopOf="@+id/telemetry_container"
+        app:layout_constraintEnd_toStartOf="@+id/temp_weather_container"
+        android:layout_marginEnd="8dp">
+
+        <TextView
+            android:id="@+id/tv_avg_speed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Avg: 0 km/h"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:fontFamily="@font/bmw_font_bold" />
+
+        <TextView
+            android:id="@+id/tv_max_speed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Max: 0 km/h"
+            android:textColor="@color/teal_200"
+            android:textSize="14sp"
+            android:fontFamily="@font/bmw_font_bold"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- Lean & Pitch Gauges -->
+    <LinearLayout
+        android:id="@+id/gauge_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/media_controls_container"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintHorizontal_bias="0.15"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.example.gsmeter.LeanAngleView
+            android:id="@+id/gauge_lean"
+            android:layout_width="85dp"
+            android:layout_height="85dp"
+            android:layout_marginBottom="8dp" />
+
+        <com.example.gsmeter.LeanAngleView
+            android:id="@+id/gauge_pitch"
+            android:layout_width="85dp"
+            android:layout_height="85dp" />
+    </LinearLayout>
+
+    <!-- Speed Reading Number -->
+    <TextView
+        android:id="@+id/tv_speed"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textColor="@color/white"
+        android:textSize="140sp"
+        app:autoSizeTextType="uniform"
+        app:autoSizeMaxTextSize="140sp"
+        app:autoSizeMinTextSize="60sp"
+        android:fontFamily="@font/bmw_font_bold"
+        android:textStyle="bold"
+        android:includeFontPadding="false"
+        android:shadowColor="#80000000"
+        android:shadowDx="4"
+        android:shadowDy="4"
+        android:shadowRadius="8"
+        app:layout_constraintBottom_toBottomOf="@+id/gs_meter_view"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/gs_meter_view"
+        app:layout_constraintVertical_bias="0.85" />
+
+    <!-- Unit -->
+    <TextView
+        android:id="@+id/tv_unit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:text="km/h"
+        android:textColor="@color/white"
+        android:textSize="24sp"
+        android:fontFamily="@font/bmw_font_bold"
+        android:textStyle="bold"
+        android:shadowColor="#80000000"
+        android:shadowDx="2"
+        android:shadowDy="2"
+        android:shadowRadius="4"
+        app:layout_constraintBottom_toBottomOf="@+id/tv_speed"
+        app:layout_constraintStart_toEndOf="@+id/tv_speed"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Location Group -->
+    <LinearLayout
+        android:id="@+id/location_container"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@+id/tv_speed"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/tv_location"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Locating..."
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:fontFamily="@font/bmw_font_bold"
+            android:shadowColor="#80000000"
+            android:shadowRadius="4" />
+
+        <TextView
+            android:id="@+id/tv_country"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text=""
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:fontFamily="@font/bmw_font_bold"
+            android:shadowColor="#80000000"
+            android:shadowRadius="4" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_offline_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:fontFamily="@font/bmw_font_bold"
+        android:text="No internet. Last sync: --:--"
+        android:textColor="#FF5252"
+        android:textSize="10sp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/forecast_container"
+        app:layout_constraintEnd_toEndOf="@+id/guide_right_edge" />
+
+    <!-- Hourly Forecast Display -->
+    <LinearLayout
+        android:id="@+id/forecast_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="15dp"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:background="@drawable/telemetry_bg"
+        android:gravity="center"
+        app:layout_constraintBottom_toTopOf="@+id/temp_weather_container"
+        app:layout_constraintEnd_toEndOf="@+id/guide_right_edge">
+
+        <LinearLayout
+            android:id="@+id/forecast_items_holder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </LinearLayout>
+
+    <!-- Temperature and Weather Display -->
+    <LinearLayout
+        android:id="@+id/temp_weather_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="@drawable/telemetry_bg"
+        app:layout_constraintBottom_toTopOf="@+id/telemetry_container"
+        app:layout_constraintEnd_toEndOf="@+id/guide_right_edge">
+
+        <TextView
+            android:id="@+id/tv_temp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--°C"
+            android:textColor="@color/white"
+            android:textSize="24sp"
+            android:fontFamily="@font/bmw_font_bold" />
+
+        <TextView
+            android:id="@+id/tv_weather_condition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="---"
+            android:textColor="@color/teal_200"
+            android:textSize="16sp"
+            android:fontFamily="@font/bmw_font_bold" />
+    </LinearLayout>
+
+    <!-- Telemetry Row -->
+    <LinearLayout
+        android:id="@+id/telemetry_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="@drawable/telemetry_bg"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="@+id/guide_right_edge">
+
+        <TextView
+            android:id="@+id/tv_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:text="--:-- --"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:fontFamily="@font/bmw_font_bold" />
+
+        <TextView
+            android:id="@+id/tv_altitude"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:text="0 m"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:fontFamily="@font/bmw_font_bold" />
+
+        <TextView
+            android:id="@+id/tv_heading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:text="N"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            android:fontFamily="@font/bmw_font_bold" />
+
+        <TextView
+            android:id="@+id/tv_sats"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sats: 0"
+            android:textColor="@color/teal_200"
+            android:textSize="16sp"
+            android:fontFamily="@font/bmw_font_bold" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_permissions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Enable GPS"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

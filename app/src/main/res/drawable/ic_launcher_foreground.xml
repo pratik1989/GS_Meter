@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Silver Ring -->
+    <path
+        android:fillColor="#D1D1D1"
+        android:pathData="M54,15C32.5,15 15,32.5 15,54s17.5,39 39,39s39,-17.5 39,-39S75.5,15 54,15zM54,89C34.7,89 19,73.3 19,54s15.7,-35 35,-35s35,15.7 35,35S73.3,89 54,89z"/>
+    <!-- Dial Markings -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,22l0,4M76.6,31.4l-2.8,2.8M86,54l-4,0M76.6,76.6l-2.8,-2.8M54,86l0,-4M31.4,76.6l2.8,-2.8M22,54l4,0M31.4,31.4l2.8,2.8"/>
+    <!-- Red Needle -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M54,54m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0M54,54L75,33L77,35L54,54Z"/>
+</vector>
