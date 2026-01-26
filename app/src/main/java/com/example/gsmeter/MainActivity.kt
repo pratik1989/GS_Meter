@@ -25,6 +25,7 @@ import android.os.*
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.Surface
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -70,6 +71,7 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private lateinit var btnMediaNext: ImageButton
     private lateinit var btnMusicApp: ImageButton
     private lateinit var btnInfo: ImageButton
+    private lateinit var btnResetGauges: ImageButton
     private lateinit var cardInfo: CardView
     private lateinit var switchAutoLock: SwitchCompat
     
@@ -101,6 +103,7 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
     private var initialLean: Float = 0f
     private var initialPitch: Float = 0f
+    private var rotationFactor: Float = 1f
     private var isCalibrated = false
     private var lastSyncTime: String? = null
     private var isCurrentlyConnected = true
@@ -230,6 +233,7 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         btnMediaNext = findViewById(R.id.btn_media_next)
         btnMusicApp = findViewById(R.id.btn_music_app)
         btnInfo = findViewById(R.id.btn_info)
+        btnResetGauges = findViewById(R.id.btn_reset_gauges)
         cardInfo = findViewById(R.id.card_info)
         switchAutoLock = findViewById(R.id.switch_auto_lock)
         
@@ -288,6 +292,11 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
         btnInfo.setOnClickListener {
             cardInfo.visibility = if (cardInfo.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+
+        btnResetGauges.setOnClickListener {
+            isCalibrated = false
+            Toast.makeText(this, "Gauges Reset / Calibrated", Toast.LENGTH_SHORT).show()
         }
 
         val tvYoutube = findViewById<TextView>(R.id.tv_info_youtube)
@@ -385,11 +394,23 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             if (!isCalibrated) {
                 initialPitch = pitch
                 initialLean = roll
+                
+                val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    display?.rotation ?: Surface.ROTATION_0
+                } else {
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay.rotation
+                }
+                
+                // rotationFactor handles the flip when device is in Landscape Right (270)
+                rotationFactor = if (rotation == Surface.ROTATION_270) -1f else 1f
                 isCalibrated = true
             }
 
-            val currentPitch = pitch - initialPitch
-            val currentLean = roll - initialLean
+            // user requested inversed readings: -(current - initial)
+            // and we multiply by rotationFactor to handle the 180 flip
+            val currentPitch = -(pitch - initialPitch) * rotationFactor
+            val currentLean = -(roll - initialLean) * rotationFactor
 
             gaugeLean.setAngle(currentLean)
             gaugePitch.setAngle(currentPitch)

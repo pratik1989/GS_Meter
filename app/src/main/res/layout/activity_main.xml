@@ -253,23 +253,42 @@
         android:id="@+id/gauge_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:layout_marginBottom="8dp"
         app:layout_constraintBottom_toTopOf="@+id/media_controls_container"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintHorizontal_bias="0.15"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <com.example.gsmeter.LeanAngleView
-            android:id="@+id/gauge_lean"
-            android:layout_width="85dp"
-            android:layout_height="85dp"
-            android:layout_marginBottom="8dp" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:orientation="vertical">
 
-        <com.example.gsmeter.LeanAngleView
-            android:id="@+id/gauge_pitch"
-            android:layout_width="85dp"
-            android:layout_height="85dp" />
+            <com.example.gsmeter.LeanAngleView
+                android:id="@+id/gauge_lean"
+                android:layout_width="85dp"
+                android:layout_height="85dp"
+                android:layout_marginBottom="8dp" />
+
+            <com.example.gsmeter.LeanAngleView
+                android:id="@+id/gauge_pitch"
+                android:layout_width="85dp"
+                android:layout_height="85dp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btn_reset_gauges"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="3dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_revert"
+            android:contentDescription="Reset Gauges"
+            android:tint="@color/teal_200"
+            android:scaleType="fitCenter"/>
     </LinearLayout>
 
     <!-- Speed Reading Number -->
