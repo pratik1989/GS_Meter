@@ -1,3 +1,5 @@
+<img width="2158" height="964" alt="image" src="https://github.com/user-attachments/assets/c052c3ac-0771-427e-b77e-5a5cf689eeaf" />
+
 ### **🏍️ Motorcycle GPS Speedometer – BMW GS Style Dashboard (Android)**
 
 A premium Android motorcycle dashboard application inspired by the iconic BMW GS instrument cluster.
