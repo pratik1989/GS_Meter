@@ -1,4 +1,4 @@
-<img width="2058" height="922" alt="image" src="https://github.com/user-attachments/assets/8e09af73-e419-4363-9163-6aa95b861252" />
+<img width="2238" height="1002" alt="image" src="https://github.com/user-attachments/assets/1ab7b109-3a31-4617-86f5-68a028027df5" />
 
 
 ### **🏍️ Motorcycle GPS Speedometer – BMW GS Style Dashboard (Android)**
