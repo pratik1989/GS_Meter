@@ -31,11 +31,13 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.cardview.widget.CardView
@@ -43,6 +45,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import org.json.JSONObject
+import org.osmdroid.config.Configuration
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -53,6 +60,7 @@ import kotlin.concurrent.thread
 class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener {
 
     private lateinit var tvSpeed: TextView
+    private lateinit var tvUnit: TextView
     private lateinit var tvAltitude: TextView
     private lateinit var tvHeading: TextView
     private lateinit var tvSats: TextView
@@ -61,9 +69,11 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private lateinit var tvCountry: TextView
     private lateinit var tvWeather: TextView
     private lateinit var tvOfflineStatus: TextView
+    private lateinit var tvDistance: TextView
     private lateinit var forecastItemsHolder: LinearLayout
     private lateinit var btnPermissions: Button
     private lateinit var btnToggleUi: ImageButton
+    private lateinit var btnResetDistance: ImageButton
     private lateinit var gsMeterView: GSSpeedometerView
     
     private lateinit var btnMediaPrev: ImageButton
@@ -74,13 +84,28 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private lateinit var btnResetGauges: ImageButton
     private lateinit var cardInfo: CardView
     private lateinit var switchAutoLock: SwitchCompat
+    private lateinit var switchHideStats: SwitchCompat
     
     private lateinit var tvAvgSpeed: TextView
     private lateinit var tvMaxSpeed: TextView
     private lateinit var tvTime: TextView
+    
+    private lateinit var tvBattery: TextView
+    private lateinit var ivBattery: ImageView
 
     private lateinit var gaugeLean: LeanAngleView
     private lateinit var gaugePitch: LeanAngleView
+
+    private lateinit var locationContainer: LinearLayout
+    private lateinit var mapOverlayContainer: FrameLayout
+    private lateinit var btnCloseMap: ImageButton
+    private lateinit var btnZoomIn: ImageButton
+    private lateinit var btnZoomOut: ImageButton
+    private lateinit var mapView: MapView
+
+    private lateinit var forecastContainer: View
+    private lateinit var statsWeatherRow: View
+    private lateinit var gaugeContainer: View
 
     private lateinit var locationManager: LocationManager
     private lateinit var devicePolicyManager: DevicePolicyManager
@@ -100,6 +125,18 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private var maxSpeed: Float = 0f
     private var speedSum: Double = 0.0
     private var speedCount: Int = 0
+    private var totalDistance: Float = 0f
+
+    private var useMilesPerHour = false
+    private var useMetersAltitude = false
+    private var useMilesDistance = false
+
+    private var currentMarker: Marker? = null
+    private var currentZoom = 15.0
+
+    // Smoothing variables
+    private var smoothedSpeed: Float = 0f
+    private val smoothingFactor = 0.4f
 
     private var initialLean: Float = 0f
     private var initialPitch: Float = 0f
@@ -108,12 +145,50 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private var lastSyncTime: String? = null
     private var isCurrentlyConnected = true
 
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            intent?.let {
+                val level = it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = it.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                val batteryPct = level * 100 / scale.toFloat()
+                val status = it.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                                 status == BatteryManager.BATTERY_STATUS_FULL
+
+                runOnUiThread {
+                    tvBattery.text = "${batteryPct.toInt()}%"
+                    updateBatteryIcon(batteryPct.toInt(), isCharging)
+                }
+            }
+        }
+    }
+
+    private fun updateBatteryIcon(percentage: Int, isCharging: Boolean) {
+        val iconRes = when {
+            isCharging -> R.drawable.ic_battery_charging
+            percentage >= 75 -> R.drawable.ic_battery_full
+            percentage >= 50 -> R.drawable.ic_battery_4_bar
+            percentage >= 25 -> R.drawable.ic_battery_2_bar
+            else -> R.drawable.ic_battery_std
+        }
+        ivBattery.setImageResource(iconRes)
+        
+        // Color coding
+        val color = when {
+            isCharging -> Color.parseColor("#4CAF50") // Green
+            percentage <= 15 -> Color.parseColor("#F44336") // Red
+            percentage <= 30 -> Color.parseColor("#FF9800") // Orange
+            else -> Color.WHITE
+        }
+        ivBattery.setColorFilter(color)
+        tvBattery.setTextColor(color)
+    }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as GPSForegroundService.LocalBinder
             gpsService = binder.getService()
             isBound = true
-            Log.d("MainActivity", "GPS Service Connected")
             gpsService?.setLocationCallback { location ->
                 runOnUiThread { onLocationChanged(location) }
             }
@@ -121,7 +196,6 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
-            Log.d("MainActivity", "GPS Service Disconnected")
         }
     }
 
@@ -140,43 +214,34 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private val weatherRunnable = object : Runnable {
         override fun run() {
             fetchWeather()
-            
-            val now = Calendar.getInstance()
-            val minutes = now.get(Calendar.MINUTE)
-            val next15 = ((minutes / 15) + 1) * 15
-            
-            val nextRun = (now.clone() as Calendar).apply {
-                if (next15 >= 60) {
-                    add(Calendar.HOUR_OF_DAY, 1)
-                    set(Calendar.MINUTE, 0)
-                } else {
-                    set(Calendar.MINUTE, next15)
-                }
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            
-            val delay = nextRun.timeInMillis - now.timeInMillis
-            handler.postDelayed(this, if (delay > 1000) delay else 900000L)
+            handler.postDelayed(this, 900000L) // 15 mins
         }
     }
 
     private val connectionCheckRunnable = object : Runnable {
         override fun run() {
             val connected = isNetworkAvailable()
+            
+            // UI Update for network status
+            runOnUiThread {
+                if (!connected) {
+                    val now = Calendar.getInstance()
+                    val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+                    tvOfflineStatus.text = "No internet. Last sync: ${lastSyncTime ?: timeFormat.format(now.time)}"
+                    tvOfflineStatus.visibility = View.VISIBLE
+                } else {
+                    tvOfflineStatus.visibility = View.GONE
+                }
+            }
+
             if (connected != isCurrentlyConnected) {
                 isCurrentlyConnected = connected
                 if (connected) {
-                    // Back online, trigger syncs
                     fetchWeather()
                     lastLocation?.let { updateLocationName(it) }
-                } else {
-                    showOfflineStatus()
                 }
-            } else if (!connected) {
-                showOfflineStatus()
             }
-            handler.postDelayed(this, 30000) // 30 seconds
+            handler.postDelayed(this, 30000)
         }
     }
 
@@ -196,25 +261,28 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         }
     }
 
-    private val searchTimeoutRunnable = Runnable {
-        if (lastLocation == null) {
-            tvSpeed.text = "Searching..."
-            Toast.makeText(this, "Searching for location signal. Ensure GPS is enabled.", Toast.LENGTH_LONG).show()
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Osmdroid configuration
+        Configuration.getInstance().load(this, getPreferences(Context.MODE_PRIVATE))
+        Configuration.getInstance().userAgentValue = packageName
+        
+        // Clear map cache on launch
+        val osmPath = Configuration.getInstance().osmdroidTileCache
+        if (osmPath.exists()) {
+            osmPath.deleteRecursively()
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setContentView(R.layout.activity_main)
 
         tvSpeed = findViewById(R.id.tv_speed)
+        tvUnit = findViewById(R.id.tv_unit)
         tvAltitude = findViewById(R.id.tv_altitude)
         tvHeading = findViewById(R.id.tv_heading)
         tvSats = findViewById(R.id.tv_sats)
@@ -223,9 +291,11 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         tvCountry = findViewById(R.id.tv_country)
         tvWeather = findViewById(R.id.tv_weather_condition)
         tvOfflineStatus = findViewById(R.id.tv_offline_status)
+        tvDistance = findViewById(R.id.tv_distance)
         forecastItemsHolder = findViewById(R.id.forecast_items_holder)
         btnPermissions = findViewById(R.id.btn_permissions)
         btnToggleUi = findViewById(R.id.btn_toggle_ui)
+        btnResetDistance = findViewById(R.id.btn_reset_distance)
         gsMeterView = findViewById(R.id.gs_meter_view)
         
         btnMediaPrev = findViewById(R.id.btn_media_prev)
@@ -236,15 +306,33 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         btnResetGauges = findViewById(R.id.btn_reset_gauges)
         cardInfo = findViewById(R.id.card_info)
         switchAutoLock = findViewById(R.id.switch_auto_lock)
+        switchHideStats = findViewById(R.id.switch_hide_stats)
         
         tvAvgSpeed = findViewById(R.id.tv_avg_speed)
         tvMaxSpeed = findViewById(R.id.tv_max_speed)
         tvTime = findViewById(R.id.tv_time)
+        
+        tvBattery = findViewById(R.id.tv_battery)
+        ivBattery = findViewById(R.id.iv_battery)
 
         gaugeLean = findViewById(R.id.gauge_lean)
         gaugePitch = findViewById(R.id.gauge_pitch)
 
-        gaugeLean.setConfiguration("PITCH", true, R.drawable.ic_adventure_left)
+        locationContainer = findViewById(R.id.location_container)
+        mapOverlayContainer = findViewById(R.id.map_overlay_container)
+        btnCloseMap = findViewById(R.id.btn_close_map)
+        btnZoomIn = findViewById(R.id.btn_zoom_in)
+        btnZoomOut = findViewById(R.id.btn_zoom_out)
+        mapView = findViewById(R.id.map_view)
+
+        forecastContainer = findViewById(R.id.forecast_container)
+        statsWeatherRow = findViewById(R.id.stats_weather_row)
+        gaugeContainer = findViewById(R.id.gauge_container)
+
+        mapView.setMultiTouchControls(true)
+        mapView.controller.setZoom(currentZoom)
+
+        gaugeLean.setConfiguration("PITCH", true, R.drawable.ic_motorcycle_side)
         gaugePitch.setConfiguration("LEAN", false, R.drawable.ic_motorcycle_rear)
 
         tvSpeed.text = "---"
@@ -260,24 +348,66 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         isAutoLockEnabled = prefs.getBoolean("auto_lock", false)
         switchAutoLock.isChecked = isAutoLockEnabled
         
+        val isStatsHidden = prefs.getBoolean("hide_stats", false)
+        switchHideStats.isChecked = isStatsHidden
+        updateStatsGaugesVisibility(isStatsHidden)
+
+        totalDistance = prefs.getFloat("total_distance", 0f)
+        useMilesPerHour = prefs.getBoolean("use_mph", false)
+        useMetersAltitude = prefs.getBoolean("use_meters", false)
+        useMilesDistance = prefs.getBoolean("use_miles_dist", false)
+        updateDistanceDisplay()
+        
         switchAutoLock.setOnCheckedChangeListener { _, isChecked ->
             isAutoLockEnabled = isChecked
             prefs.edit().putBoolean("auto_lock", isChecked).apply()
-            if (isChecked) {
-                requestDeviceAdmin()
-                Toast.makeText(this, "Auto lock enabled", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Auto lock disabled", Toast.LENGTH_SHORT).show()
+            if (isChecked) requestDeviceAdmin()
+        }
+
+        switchHideStats.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("hide_stats", isChecked).apply()
+            updateStatsGaugesVisibility(isChecked)
+        }
+
+        tvSpeed.setOnClickListener {
+            useMilesPerHour = !useMilesPerHour
+            prefs.edit().putBoolean("use_mph", useMilesPerHour).apply()
+            lastLocation?.let { onLocationChanged(it) }
+        }
+
+        tvAltitude.setOnClickListener {
+            useMetersAltitude = !useMetersAltitude
+            prefs.edit().putBoolean("use_meters", useMetersAltitude).apply()
+            lastLocation?.let { onLocationChanged(it) }
+        }
+
+        tvDistance.setOnClickListener {
+            useMilesDistance = !useMilesDistance
+            prefs.edit().putBoolean("use_miles_dist", useMilesDistance).apply()
+            updateDistanceDisplay()
+        }
+
+        locationContainer.setOnClickListener {
+            if (mapOverlayContainer.visibility == View.GONE) {
+                mapOverlayContainer.visibility = View.VISIBLE
+                updateMapLocation()
             }
         }
 
-        btnPermissions.setOnClickListener {
-            checkAndRequestPermissions()
+        btnCloseMap.setOnClickListener { mapOverlayContainer.visibility = View.GONE }
+        
+        btnZoomIn.setOnClickListener {
+            currentZoom += 1.0
+            mapView.controller.setZoom(currentZoom)
         }
 
-        btnToggleUi.setOnClickListener {
-            toggleStatusBar()
+        btnZoomOut.setOnClickListener {
+            currentZoom -= 1.0
+            mapView.controller.setZoom(currentZoom)
         }
+
+        btnPermissions.setOnClickListener { checkAndRequestPermissions() }
+        btnToggleUi.setOnClickListener { toggleStatusBar() }
 
         btnMediaPrev.setOnClickListener { sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
         btnMediaPlayPause.setOnClickListener { 
@@ -285,31 +415,20 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             handler.postDelayed({ updatePlayPauseIcon() }, 100)
         }
         btnMediaNext.setOnClickListener { sendMediaButtonEvent(KeyEvent.KEYCODE_MEDIA_NEXT) }
-        
-        btnMusicApp.setOnClickListener {
-            openYouTubeMusic()
-        }
-
+        btnMusicApp.setOnClickListener { openYouTubeMusic() }
         btnInfo.setOnClickListener {
             cardInfo.visibility = if (cardInfo.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
-
         btnResetGauges.setOnClickListener {
             isCalibrated = false
-            Toast.makeText(this, "Gauges Reset / Calibrated", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Gauges Reset", Toast.LENGTH_SHORT).show()
+        }
+        btnResetDistance.setOnClickListener {
+            showResetDistanceDialog()
         }
 
-        val tvYoutube = findViewById<TextView>(R.id.tv_info_youtube)
-        tvYoutube.paintFlags = tvYoutube.paintFlags or Paint.UNDERLINE_TEXT_FLAG
-        tvYoutube.setOnClickListener {
-            openUrl("https://www.youtube.com/@sleepyvoyager")
-        }
-
-        val tvInstagram = findViewById<TextView>(R.id.tv_info_instagram)
-        tvInstagram.paintFlags = tvInstagram.paintFlags or Paint.UNDERLINE_TEXT_FLAG
-        tvInstagram.setOnClickListener {
-            openUrl("https://www.instagram.com/sleepyvoyager?igsh=YXZudXN0ODZ3cTdm&utm_source=qr")
-        }
+        findViewById<TextView>(R.id.tv_info_youtube).setOnClickListener { openUrl("https://www.youtube.com/@sleepyvoyager") }
+        findViewById<TextView>(R.id.tv_info_instagram).setOnClickListener { openUrl("https://www.instagram.com/sleepyvoyager") }
 
         hideStatusBar()
 
@@ -318,66 +437,89 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             startGpsService()
             handler.post(weatherRunnable)
             handler.post(connectionCheckRunnable)
-            handler.postDelayed(searchTimeoutRunnable, 5000)
         } else {
             btnPermissions.visibility = View.VISIBLE
         }
         
         handler.post(mediaStatusRunnable)
         handler.post(timeRunnable)
-        
         if (isAutoLockEnabled) requestDeviceAdmin()
+        
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
 
-    private fun openYouTubeMusic() {
-        val packageName = "com.google.android.apps.youtube.music"
-        try {
-            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-            if (launchIntent != null) {
-                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(launchIntent)
-            } else {
-                openYouTubeMusicInPlayStore(packageName)
+    private fun updateStatsGaugesVisibility(hide: Boolean) {
+        val visibility = if (hide) View.GONE else View.VISIBLE
+        forecastContainer.visibility = visibility
+        statsWeatherRow.visibility = visibility
+        gaugeContainer.visibility = visibility
+    }
+
+    private fun updateMapLocation() {
+        val loc = lastLocation ?: return
+        val startPoint = GeoPoint(loc.latitude, loc.longitude)
+        
+        if (currentMarker == null) {
+            currentMarker = Marker(mapView)
+            currentMarker?.title = "Current Location"
+            mapView.overlays.add(currentMarker)
+        }
+        currentMarker?.position = startPoint
+        mapView.controller.animateTo(startPoint)
+        mapView.invalidate()
+    }
+
+    private fun showResetDistanceDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Reset Distance")
+            .setMessage("Do you want to reset the total distance covered?")
+            .setPositiveButton("Reset") { _, _ ->
+                totalDistance = 0f
+                updateDistanceDisplay()
+                saveDistance()
+                Toast.makeText(this, "Distance Reset", Toast.LENGTH_SHORT).show()
             }
-        } catch (e: Exception) {
-            openYouTubeMusicInPlayStore(packageName)
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun updateDistanceDisplay() {
+        if (useMilesDistance) {
+            val distanceMiles = totalDistance * 0.621371f
+            tvDistance.text = String.format("Dist: %.2f mi", distanceMiles)
+        } else {
+            tvDistance.text = String.format("Dist: %.2f km", totalDistance)
         }
     }
 
-    private fun openYouTubeMusicInPlayStore(packageName: String) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
-        } catch (e: Exception) {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
-        }
+    private fun saveDistance() {
+        getPreferences(Context.MODE_PRIVATE).edit().putFloat("total_distance", totalDistance).apply()
     }
 
     override fun onResume() {
         super.onResume()
+        mapView.onResume()
         if (hasLocationPermission()) {
-            if (!isBound) {
-                startGpsService()
-            }
+            if (!isBound) startGpsService()
             checkLocationSettings()
         }
-        rotationSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
+        rotationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
     }
 
     override fun onPause() {
         super.onPause()
+        mapView.onPause()
         sensorManager.unregisterListener(this)
     }
 
     override fun onStop() {
         super.onStop()
-        if (isAutoLockEnabled && devicePolicyManager.isAdminActive(adminComponent)) {
-            devicePolicyManager.lockNow()
+        if (isAutoLockEnabled && !isChangingConfigurations && devicePolicyManager.isAdminActive(adminComponent)) {
+            try {
+                devicePolicyManager.lockNow()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to lock device: ${e.message}")
+            }
         }
     }
 
@@ -394,24 +536,18 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             if (!isCalibrated) {
                 initialPitch = pitch
                 initialLean = roll
-                
                 val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     display?.rotation ?: Surface.ROTATION_0
                 } else {
                     @Suppress("DEPRECATION")
                     windowManager.defaultDisplay.rotation
                 }
-                
-                // rotationFactor handles the flip when device is in Landscape Right (270)
                 rotationFactor = if (rotation == Surface.ROTATION_270) -1f else 1f
                 isCalibrated = true
             }
 
-            // user requested inversed readings: -(current - initial)
-            // and we multiply by rotationFactor to handle the 180 flip
             val currentPitch = -(pitch - initialPitch) * rotationFactor
             val currentLean = -(roll - initialLean) * rotationFactor
-
             gaugeLean.setAngle(currentLean)
             gaugePitch.setAngle(currentPitch)
         }
@@ -424,17 +560,12 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         val serviceIntent = Intent(this, GPSForegroundService::class.java)
         ContextCompat.startForegroundService(this, serviceIntent)
         bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE)
-        
         try {
             locationManager.registerGnssStatusCallback(gnssStatusCallback, handler)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) {}
     }
 
-    private fun hasLocationPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    }
+    private fun hasLocationPermission(): Boolean = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun checkAndRequestPermissions() {
         if (!hasLocationPermission()) {
@@ -447,41 +578,60 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         if (requestCode == 1001 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             btnPermissions.visibility = View.GONE
             startGpsService()
-            handler.post(weatherRunnable)
-            handler.post(connectionCheckRunnable)
         }
     }
 
     override fun onLocationChanged(location: Location) {
+        if (lastLocation != null) {
+            val distance = lastLocation!!.distanceTo(location)
+            if (location.accuracy < 25 && distance > 1.0) {
+                totalDistance += distance / 1000f
+                updateDistanceDisplay()
+                saveDistance()
+            }
+        }
         lastLocation = location
         
-        val speedKmh = location.speed * 3.6f
-        tvSpeed.text = String.format("%.0f", speedKmh)
-        gsMeterView.setSpeed(speedKmh)
+        val rawSpeedKmh = location.speed * 3.6f
         
-        tvAltitude.text = String.format("%.0f m", location.altitude)
+        smoothedSpeed = (rawSpeedKmh * smoothingFactor) + (smoothedSpeed * (1f - smoothingFactor))
+        val displaySpeedKmh = if (smoothedSpeed < 1.0f) 0f else smoothedSpeed
         
-        if (speedKmh > 5.0f) {
-            tvHeading.text = getCompassDirection(location.bearing)
+        if (useMilesPerHour) {
+            val speedMph = displaySpeedKmh * 0.621371f
+            tvSpeed.text = String.format("%.0f", speedMph)
+            tvUnit.text = "mi/h"
+        } else {
+            tvSpeed.text = String.format("%.0f", displaySpeedKmh)
+            tvUnit.text = "km/h"
         }
+        gsMeterView.setSpeed(displaySpeedKmh)
         
-        if (speedKmh > 1.0) {
-            if (speedKmh > maxSpeed) {
-                maxSpeed = speedKmh
+        if (useMetersAltitude) {
+            tvAltitude.text = String.format("%.0f m", location.altitude)
+        } else {
+            val altitudeFeet = location.altitude * 3.28084
+            tvAltitude.text = String.format("%.0f ft", altitudeFeet)
+        }
+
+        if (displaySpeedKmh > 5.0f) tvHeading.text = getCompassDirection(location.bearing)
+        
+        if (displaySpeedKmh > 1.0) {
+            if (displaySpeedKmh > maxSpeed) {
+                maxSpeed = displaySpeedKmh
                 tvMaxSpeed.text = String.format("Max: %.0f km/h", maxSpeed)
             }
-            speedSum += speedKmh
+            speedSum += displaySpeedKmh
             speedCount++
-            val avgSpeed = speedSum / speedCount
-            tvAvgSpeed.text = String.format("Avg: %.0f km/h", avgSpeed)
+            tvAvgSpeed.text = String.format("Avg: %.0f km/h", speedSum / speedCount)
         }
 
         if (!hasFetchedInitialWeather) {
             fetchWeather()
             hasFetchedInitialWeather = true
         }
-        
         updateLocationName(location)
+        if (mapOverlayContainer.visibility == View.VISIBLE) updateMapLocation()
     }
 
     private fun updateLocationName(location: Location) {
@@ -489,23 +639,17 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             try {
                 val geocoder = Geocoder(this, Locale.getDefault())
                 val addresses: List<Address>? = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                
                 if (!addresses.isNullOrEmpty()) {
                     val address = addresses[0]
-                    val city = address.locality ?: address.subAdminArea ?: address.adminArea ?: "Unknown"
+                    val city = address.locality ?: address.subAdminArea ?: "Unknown"
                     val state = address.adminArea ?: ""
                     val country = address.countryName ?: ""
-                    
-                    val locationText = if (state.isNotEmpty() && state != city) "$city, $state" else city
-
                     runOnUiThread {
-                        tvLocation.text = locationText
+                        tvLocation.text = if (state.isNotEmpty()) "$city, $state" else city
                         tvCountry.text = country
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) {}
         }
     }
 
@@ -513,42 +657,24 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val nw = connectivityManager.activeNetwork ?: return false
         val actNw = connectivityManager.getNetworkCapabilities(nw) ?: return false
-        return when {
-            actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
-            actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
-            actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
-            actNw.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> true
-            else -> false
-        }
+        return actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
     }
 
     private fun fetchWeather() {
         val loc = lastLocation ?: return
-        
-        if (!isNetworkAvailable()) {
-            runOnUiThread { showOfflineStatus() }
-            return
-        }
-
+        if (!isNetworkAvailable()) return
         thread {
             try {
                 val urlString = "https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code&forecast_days=2&timezone=auto"
-                
                 val url = URL(urlString)
                 val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
-                
-                val responseCode = connection.responseCode
-                if (responseCode == 200) {
+                if (connection.responseCode == 200) {
                     val response = connection.inputStream.bufferedReader().readText()
                     val json = JSONObject(response)
                     
                     val current = json.getJSONObject("current")
                     val currentTemp = current.getDouble("temperature_2m")
                     val currentWeatherCode = current.getInt("weather_code")
-                    val currentDesc = getWeatherDescription(currentWeatherCode)
                     
                     val hourly = json.getJSONObject("hourly")
                     val hourlyTemps = hourly.getJSONArray("temperature_2m")
@@ -567,7 +693,6 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
                             break
                         }
                     }
-
                     if (startIndex == -1) startIndex = 0
 
                     val forecastData = mutableListOf<ForecastItem>()
@@ -577,10 +702,8 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
                         if (i < hourlyTemps.length()) {
                             val timeStr = hourlyTimes.getString(i)
                             val date = timeParser.parse(timeStr)
-                            val formattedTime = outputFormat.format(date!!)
-
                             forecastData.add(ForecastItem(
-                                time = formattedTime,
+                                time = outputFormat.format(date!!),
                                 temp = hourlyTemps.getDouble(i).toInt(),
                                 code = hourlyCodes.getInt(i)
                             ))
@@ -588,31 +711,18 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
                     }
 
                     runOnUiThread {
-                        lastSyncTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Calendar.getInstance().time)
-                        tvOfflineStatus.visibility = View.GONE
-                        isCurrentlyConnected = true
-                        
                         tvTemp.text = String.format("%.0f°C", currentTemp)
-                        tvWeather.text = currentDesc
+                        tvWeather.text = getWeatherDescription(currentWeatherCode)
+                        tvOfflineStatus.visibility = View.GONE
+                        val now = Calendar.getInstance()
+                        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+                        lastSyncTime = timeFormat.format(now.time)
                         updateForecastUI(forecastData)
                     }
-                } else {
-                    runOnUiThread { showOfflineStatus() }
                 }
-            } catch (e: Exception) {
-                Log.e("Weather", "Exception: ${e.message}", e)
-                runOnUiThread { showOfflineStatus() }
-            }
+            } catch (e: Exception) {}
         }
     }
-
-    private fun showOfflineStatus() {
-        tvOfflineStatus.visibility = View.VISIBLE
-        val syncText = if (lastSyncTime != null) "Last sync: $lastSyncTime" else "Never synced"
-        tvOfflineStatus.text = "No internet. $syncText"
-    }
-
-    private data class ForecastItem(val time: String, val temp: Int, val code: Int)
 
     private fun updateForecastUI(forecast: List<ForecastItem>) {
         forecastItemsHolder.removeAllViews()
@@ -630,7 +740,7 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             val itemView = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dpToPx(8), 0, dpToPx(8), 0)
+                setPadding(dpToPx(6), 0, dpToPx(6), 0)
             }
 
             val tvTimeItem = TextView(this).apply {
@@ -664,26 +774,27 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         }
     }
 
+    private data class ForecastItem(val time: String, val temp: Int, val code: Int)
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
     private fun getWeatherDescription(code: Int): String {
         return when (code) {
             0 -> "Clear sky"
-            1, 2, 3 -> "Mainly clear"
+            1, 2, 3 -> "Partly cloudy"
             45, 48 -> "Fog"
             51, 53, 55 -> "Drizzle"
             61, 63, 65 -> "Rain"
             71, 73, 75 -> "Snow fall"
             80, 81, 82 -> "Rain showers"
             95, 96, 99 -> "Thunderstorm"
-            else -> "Unknown"
+            else -> "Cloudy"
         }
     }
     
     private fun getWeatherShortDescription(code: Int): String {
         return when (code) {
             0 -> "Clear"
-            1, 2, 3 -> "Clear"
+            1, 2, 3 -> "Cloudy"
             45, 48 -> "Fog"
             51, 53, 55 -> "Drizzle"
             61, 63, 65 -> "Rain"
@@ -696,29 +807,16 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
     private fun getCompassDirection(bearing: Float): String {
         val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-        val index = ((bearing + 22.5) / 45).toInt() % 8
-        return directions[index]
+        return directions[((bearing + 22.5) / 45).toInt() % 8]
     }
 
-    private fun toggleStatusBar() {
-        if (isStatusBarHidden) showStatusBar() else hideStatusBar()
-    }
+    private fun toggleStatusBar() { if (isStatusBarHidden) showStatusBar() else hideStatusBar() }
 
     private fun hideStatusBar() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
-            window.insetsController?.let {
-                it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
+            window.insetsController?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            window.insetsController?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         isStatusBarHidden = true
     }
@@ -727,11 +825,6 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(true)
             window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
         }
         isStatusBarHidden = false
     }
@@ -739,54 +832,42 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private fun sendMediaButtonEvent(keyCode: Int) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val eventTime = SystemClock.uptimeMillis()
-        
-        val downEvent = KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0)
-        audioManager.dispatchMediaKeyEvent(downEvent)
-
-        val upEvent = KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0)
-        audioManager.dispatchMediaKeyEvent(upEvent)
+        audioManager.dispatchMediaKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0))
+        audioManager.dispatchMediaKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0))
     }
 
     private fun updatePlayPauseIcon() {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val iconRes = if (audioManager.isMusicActive) {
-            android.R.drawable.ic_media_pause
-        } else {
-            android.R.drawable.ic_media_play
-        }
-        btnMediaPlayPause.setImageResource(iconRes)
+        btnMediaPlayPause.setImageResource(if (audioManager.isMusicActive) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+    }
+
+    private fun openYouTubeMusic() {
+        val intent = packageManager.getLaunchIntentForPackage("com.google.android.apps.youtube.music")
+        if (intent != null) startActivity(intent)
     }
 
     private fun openUrl(url: String) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Could not open link", Toast.LENGTH_SHORT).show()
-        }
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) {}
     }
 
     private fun requestDeviceAdmin() {
         if (!devicePolicyManager.isAdminActive(adminComponent)) {
             val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
             intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
-            intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Required to automatically lock the screen when you exit the app.")
             startActivity(intent)
         }
     }
 
     private fun checkLocationSettings() {
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            Toast.makeText(this, "Please enable GPS for better accuracy", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Enable GPS for accuracy", Toast.LENGTH_LONG).show()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (isBound) {
-            unbindService(serviceConnection)
-            isBound = false
-        }
+        if (isBound) unbindService(serviceConnection)
+        unregisterReceiver(batteryReceiver)
         handler.removeCallbacksAndMessages(null)
     }
 }

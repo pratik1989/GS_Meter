@@ -48,34 +48,28 @@ class GPSForegroundService : Service(), LocationListener {
 
     private fun startLocationUpdates() {
         try {
-            val hasFine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            val hasCoarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
-            if (hasFine || hasCoarse) {
-                // Get all providers (even disabled ones, we'll try to request from them)
-                val allProviders = locationManager.allProviders
-                Log.d("GPSForegroundService", "Available providers: $allProviders")
-
-                for (provider in allProviders) {
-                    if (provider == LocationManager.PASSIVE_PROVIDER) continue
-                    
-                    try {
-                        locationManager.requestLocationUpdates(
-                            provider,
-                            1000L,
-                            0f,
-                            this
-                        )
-                        Log.d("GPSForegroundService", "Successfully requested updates from $provider")
-                    } catch (e: Exception) {
-                        Log.e("GPSForegroundService", "Failed to request updates from $provider: ${e.message}")
-                    }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                // We prioritize GPS_PROVIDER for speedometer accuracy
+                // Minimum time: 500ms for high responsiveness, 0 distance change
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    500L,
+                    0f,
+                    this
+                )
+                
+                // Also request from fused/network as a fallback, but we'll prioritize GPS in the callback
+                if (locationManager.allProviders.contains(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER,
+                        2000L,
+                        0f,
+                        this
+                    )
                 }
                 
-                // Immediate attempt to get a location
+                Log.d("GPSForegroundService", "Location updates requested")
                 sendLastBestLocation()
-            } else {
-                Log.e("GPSForegroundService", "Location permissions not granted")
             }
         } catch (e: SecurityException) {
             Log.e("GPSForegroundService", "SecurityException in startLocationUpdates", e)
@@ -83,41 +77,37 @@ class GPSForegroundService : Service(), LocationListener {
     }
 
     private fun sendLastBestLocation() {
-        var bestLocation: Location? = null
-        for (provider in locationManager.allProviders) {
-            try {
-                val l = locationManager.getLastKnownLocation(provider) ?: continue
-                if (bestLocation == null || l.accuracy < bestLocation.accuracy) {
-                    bestLocation = l
-                }
-            } catch (e: SecurityException) {}
-        }
-        bestLocation?.let { 
-            Log.d("GPSForegroundService", "Initial fix found from last known location: ${it.provider}")
-            onLocationChanged(it) 
-        }
+        try {
+            val lastGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            val lastNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            
+            val best = if (lastGps != null && (lastNetwork == null || lastGps.accuracy < lastNetwork.accuracy)) {
+                lastGps
+            } else {
+                lastNetwork
+            }
+            
+            best?.let { onLocationChanged(it) }
+        } catch (e: SecurityException) {}
     }
 
     fun setLocationCallback(callback: (Location) -> Unit) {
         this.locationCallback = callback
-        Log.d("GPSForegroundService", "UI Callback attached")
-        // Try to send an initial fix if available
         sendLastBestLocation()
     }
 
     override fun onLocationChanged(location: Location) {
-        Log.d("GPSForegroundService", "Location update received from ${location.provider}: Lat ${location.latitude}, Lon ${location.longitude}")
+        // Basic filtering: Ignore locations with extremely poor accuracy (> 60m)
+        // for speedometer purposes, unless we have nothing else.
+        if (location.accuracy > 60f && location.provider != LocationManager.GPS_PROVIDER) return
+        
         locationCallback?.invoke(location)
     }
 
+    override fun onProviderEnabled(provider: String) {}
+    override fun onProviderDisabled(provider: String) {}
     @Suppress("DEPRECATION")
     override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
-    override fun onProviderEnabled(provider: String) {
-        Log.d("GPSForegroundService", "Provider enabled: $provider")
-    }
-    override fun onProviderDisabled(provider: String) {
-        Log.d("GPSForegroundService", "Provider disabled: $provider")
-    }
 
     private fun createNotification(content: String): Notification {
         val pendingIntent = Intent(this, MainActivity::class.java).let {
@@ -140,9 +130,7 @@ class GPSForegroundService : Service(), LocationListener {
                 "gps_channel",
                 "GPS Tracking Channel",
                 NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows that the speedometer is active"
-            }
+            )
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
