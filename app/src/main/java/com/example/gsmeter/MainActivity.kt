@@ -31,6 +31,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -85,6 +86,8 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private lateinit var cardInfo: CardView
     private lateinit var switchAutoLock: SwitchCompat
     private lateinit var switchHideStats: SwitchCompat
+    private lateinit var cbHideGauges: CheckBox
+    private lateinit var cbHideStats: CheckBox
     
     private lateinit var tvAvgSpeed: TextView
     private lateinit var tvMaxSpeed: TextView
@@ -307,6 +310,8 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         cardInfo = findViewById(R.id.card_info)
         switchAutoLock = findViewById(R.id.switch_auto_lock)
         switchHideStats = findViewById(R.id.switch_hide_stats)
+        cbHideGauges = findViewById(R.id.cb_hide_gauges)
+        cbHideStats = findViewById(R.id.cb_hide_stats)
         
         tvAvgSpeed = findViewById(R.id.tv_avg_speed)
         tvMaxSpeed = findViewById(R.id.tv_max_speed)
@@ -348,9 +353,12 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         isAutoLockEnabled = prefs.getBoolean("auto_lock", false)
         switchAutoLock.isChecked = isAutoLockEnabled
         
-        val isStatsHidden = prefs.getBoolean("hide_stats", false)
-        switchHideStats.isChecked = isStatsHidden
-        updateStatsGaugesVisibility(isStatsHidden)
+        val isMasterHideEnabled = prefs.getBoolean("hide_stats", false)
+        switchHideStats.isChecked = isMasterHideEnabled
+        cbHideGauges.isChecked = prefs.getBoolean("pref_hide_gauges", true)
+        cbHideStats.isChecked = prefs.getBoolean("pref_hide_stats", true)
+        
+        updateStatsGaugesVisibility()
 
         totalDistance = prefs.getFloat("total_distance", 0f)
         useMilesPerHour = prefs.getBoolean("use_mph", false)
@@ -366,7 +374,17 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
         switchHideStats.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("hide_stats", isChecked).apply()
-            updateStatsGaugesVisibility(isChecked)
+            updateStatsGaugesVisibility()
+        }
+
+        cbHideGauges.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("pref_hide_gauges", isChecked).apply()
+            updateStatsGaugesVisibility()
+        }
+
+        cbHideStats.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("pref_hide_stats", isChecked).apply()
+            updateStatsGaugesVisibility()
         }
 
         tvSpeed.setOnClickListener {
@@ -448,11 +466,20 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
 
-    private fun updateStatsGaugesVisibility(hide: Boolean) {
-        val visibility = if (hide) View.GONE else View.VISIBLE
-        forecastContainer.visibility = visibility
-        statsWeatherRow.visibility = visibility
-        gaugeContainer.visibility = visibility
+    private fun updateStatsGaugesVisibility() {
+        val masterHide = switchHideStats.isChecked
+        
+        if (!masterHide) {
+            forecastContainer.visibility = View.VISIBLE
+            statsWeatherRow.visibility = View.VISIBLE
+            gaugeContainer.visibility = View.VISIBLE
+        } else {
+            gaugeContainer.visibility = if (cbHideGauges.isChecked) View.GONE else View.VISIBLE
+            
+            val statsVisibility = if (cbHideStats.isChecked) View.GONE else View.VISIBLE
+            forecastContainer.visibility = statsVisibility
+            statsWeatherRow.visibility = statsVisibility
+        }
     }
 
     private fun updateMapLocation() {

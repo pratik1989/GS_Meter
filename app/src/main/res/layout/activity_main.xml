@@ -144,89 +144,133 @@
         app:cardCornerRadius="12dp"
         app:cardElevation="8dp"
         app:layout_constraintBottom_toTopOf="@+id/media_controls_container"
-        app:layout_constraintStart_toStartOf="@+id/media_controls_container">
+        app:layout_constraintStart_toStartOf="@+id/media_controls_container"
+        app:layout_constrainedHeight="true"
+        app:layout_constraintHeight_max="300dp">
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:fadeScrollbars="false">
 
-            <!-- Auto-Lock Toggle -->
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switch_auto_lock"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Auto Lock on Exit"
-                android:textColor="@color/white"
-                android:textSize="12sp"
-                android:fontFamily="@font/bmw_font_bold"
-                android:checked="false"
-                app:thumbTint="@color/teal_200"
-                app:trackTint="#80FFFFFF" />
-
-            <!-- Toggle Hide Stats/Gauges -->
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switch_hide_stats"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Hide Stats &amp; Gauges"
-                android:textColor="@color/white"
-                android:textSize="12sp"
-                android:fontFamily="@font/bmw_font_bold"
-                android:checked="false"
-                app:thumbTint="@color/teal_200"
-                app:trackTint="#80FFFFFF" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginVertical="8dp"
-                android:background="#40FFFFFF" />
-
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Made with pride for Riders by"
-                android:textColor="@color/white"
-                android:textSize="12sp"
-                android:fontFamily="@font/bmw_font_bold" />
+                android:orientation="vertical"
+                android:padding="16dp">
 
-            <TextView
-                android:id="@+id/tv_info_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Pratik Kumar"
-                android:textColor="#3DBCDB"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:fontFamily="@font/bmw_font_bold"
-                android:layout_marginTop="4dp" />
+                <!-- Auto-Lock Toggle -->
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_auto_lock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Auto Lock on Exit"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:fontFamily="@font/bmw_font_bold"
+                    android:checked="false"
+                    app:thumbTint="@color/teal_200"
+                    app:trackTint="#80FFFFFF" />
 
-            <TextView
-                android:id="@+id/tv_info_youtube"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="YouTube Channel : @SleepyVoyager"
-                android:textColor="#3DBCDB"
-                android:textSize="14sp"
-                android:layout_marginTop="8dp"
-                android:fontFamily="@font/bmw_font_bold"
-                android:textStyle="bold" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="8dp"
+                    android:background="#40FFFFFF" />
 
-            <TextView
-                android:id="@+id/tv_info_instagram"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Instagram : SleepyVoyager"
-                android:textColor="#3DBCDB"
-                android:textSize="14sp"
-                android:layout_marginTop="4dp"
-                android:fontFamily="@font/bmw_font_bold"
-                android:textStyle="bold" />
+                <!-- Toggle Hide Stats/Gauges -->
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_hide_stats"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Hide Stats &amp; Gauges"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:fontFamily="@font/bmw_font_bold"
+                    android:checked="false"
+                    app:thumbTint="@color/teal_200"
+                    app:trackTint="#80FFFFFF" />
 
-        </LinearLayout>
+                <!-- Checkboxes for individual hiding - SIDE BY SIDE -->
+                <LinearLayout
+                    android:id="@+id/hide_options_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
+
+                    <androidx.appcompat.widget.AppCompatCheckBox
+                        android:id="@+id/cb_hide_gauges"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Gauges"
+                        android:textColor="@color/white"
+                        android:textSize="11sp"
+                        android:fontFamily="@font/bmw_font_bold"
+                        app:buttonTint="@color/teal_200" />
+
+                    <androidx.appcompat.widget.AppCompatCheckBox
+                        android:id="@+id/cb_hide_stats"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Stats"
+                        android:textColor="@color/white"
+                        android:textSize="11sp"
+                        android:fontFamily="@font/bmw_font_bold"
+                        app:buttonTint="@color/teal_200" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="8dp"
+                    android:background="#40FFFFFF" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Made with pride for Riders by"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:fontFamily="@font/bmw_font_bold" />
+
+                <TextView
+                    android:id="@+id/tv_info_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Pratik Kumar"
+                    android:textColor="#3DBCDB"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/bmw_font_bold"
+                    android:layout_marginTop="4dp" />
+
+                <TextView
+                    android:id="@+id/tv_info_youtube"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="YouTube Channel : @SleepyVoyager"
+                    android:textColor="#3DBCDB"
+                    android:textSize="14sp"
+                    android:layout_marginTop="8dp"
+                    android:fontFamily="@font/bmw_font_bold"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_info_instagram"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Instagram : SleepyVoyager"
+                    android:textColor="#3DBCDB"
+                    android:textSize="14sp"
+                    android:layout_marginTop="4dp"
+                    android:fontFamily="@font/bmw_font_bold"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+        </ScrollView>
     </androidx.cardview.widget.CardView>
 
     <TextView
@@ -601,18 +645,22 @@
                 android:id="@+id/btn_zoom_in"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
-                android:background="@drawable/telemetry_bg"
+                android:background="@drawable/map_button_bg"
                 android:src="@android:drawable/ic_menu_add"
-                android:tint="@color/white" />
+                android:tint="@color/white"
+                android:scaleType="centerInside"
+                android:padding="8dp"/>
 
             <ImageButton
                 android:id="@+id/btn_zoom_out"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:layout_marginTop="4dp"
-                android:background="@drawable/telemetry_bg"
+                android:background="@drawable/map_button_bg"
                 android:src="@android:drawable/ic_menu_close_clear_cancel"
-                android:tint="@color/white" />
+                android:tint="@color/white"
+                android:scaleType="centerInside"
+                android:padding="8dp"/>
         </LinearLayout>
 
         <ImageButton
@@ -621,9 +669,11 @@
             android:layout_height="32dp"
             android:layout_gravity="top|end"
             android:layout_margin="8dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="@drawable/map_button_bg"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:tint="@color/white" />
+            android:tint="@color/white"
+            android:scaleType="centerInside"
+            android:padding="6dp"/>
     </FrameLayout>
 
     <Button
