@@ -4,7 +4,8 @@
 
 <img width="2136" height="962" alt="image" src="https://github.com/user-attachments/assets/d5cf3060-20cb-48b5-91aa-451a4cf8cac4" />
 
-<img width="2144" height="966" alt="image" src="https://github.com/user-attachments/assets/3fd10866-6429-445d-9379-f79ea2251c88" />
+<img width="2032" height="914" alt="image" src="https://github.com/user-attachments/assets/5c4f81c9-5c0a-4a8a-bbed-2c82a24ec21f" />
+
 
 
 A premium Android motorcycle dashboard application inspired by the iconic BMW GS instrument cluster.
