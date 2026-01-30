@@ -139,7 +139,11 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
     // Smoothing variables
     private var smoothedSpeed: Float = 0f
-    private val smoothingFactor = 0.4f
+    private val speedSmoothingFactor = 0.3f
+    
+    // Aggressive smoothing for motorcycle vibrations (0.0 to 1.0)
+    // Low value heavily filters high-frequency noise from engine/road vibrations
+    private val sensorSmoothingFactor = 0.06f
 
     private var initialLean: Float = 0f
     private var initialPitch: Float = 0f
@@ -147,6 +151,9 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private var isCalibrated = false
     private var lastSyncTime: String? = null
     private var isCurrentlyConnected = true
+
+    private var smoothedLean: Float = 0f
+    private var smoothedPitch: Float = 0f
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -337,8 +344,9 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         mapView.setMultiTouchControls(true)
         mapView.controller.setZoom(currentZoom)
 
-        gaugeLean.setConfiguration("PITCH", true, R.drawable.ic_motorcycle_side)
-        gaugePitch.setConfiguration("LEAN", false, R.drawable.ic_motorcycle_rear)
+        // Lean uses rear view (banking), Pitch uses side view (incline)
+        gaugeLean.setConfiguration("LEAN", false, R.drawable.ic_motorcycle_rear)
+        gaugePitch.setConfiguration("PITCH", true, R.drawable.ic_motorcycle_side)
 
         tvSpeed.text = "---"
 
@@ -530,7 +538,8 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             if (!isBound) startGpsService()
             checkLocationSettings()
         }
-        rotationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+        // Use GAME delay for vehicle dynamics + high-frequency filtering
+        rotationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
     }
 
     override fun onPause() {
@@ -563,6 +572,8 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             if (!isCalibrated) {
                 initialPitch = pitch
                 initialLean = roll
+                smoothedPitch = 0f
+                smoothedLean = 0f
                 val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     display?.rotation ?: Surface.ROTATION_0
                 } else {
@@ -575,8 +586,13 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
             val currentPitch = -(pitch - initialPitch) * rotationFactor
             val currentLean = -(roll - initialLean) * rotationFactor
-            gaugeLean.setAngle(currentLean)
-            gaugePitch.setAngle(currentPitch)
+            
+            // Aggressive Low Pass Filter for sensor readings to negate engine/road vibrations
+            smoothedPitch = (currentPitch * sensorSmoothingFactor) + (smoothedPitch * (1f - sensorSmoothingFactor))
+            smoothedLean = (currentLean * sensorSmoothingFactor) + (smoothedLean * (1f - sensorSmoothingFactor))
+
+            gaugeLean.setAngle(smoothedLean)
+            gaugePitch.setAngle(smoothedPitch)
         }
     }
 
@@ -621,7 +637,7 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
         
         val rawSpeedKmh = location.speed * 3.6f
         
-        smoothedSpeed = (rawSpeedKmh * smoothingFactor) + (smoothedSpeed * (1f - smoothingFactor))
+        smoothedSpeed = (rawSpeedKmh * speedSmoothingFactor) + (smoothedSpeed * (1f - speedSmoothingFactor))
         val displaySpeedKmh = if (smoothedSpeed < 1.0f) 0f else smoothedSpeed
         
         if (useMilesPerHour) {

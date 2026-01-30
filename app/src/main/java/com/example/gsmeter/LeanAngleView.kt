@@ -11,7 +11,8 @@ class LeanAngleView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private var angle: Float = 0f
+    private var currentAngle: Float = 0f
+    private var targetAngle: Float = 0f
     private var label: String = "LEAN"
     private var showSign: Boolean = false
     private var iconResId: Int = R.drawable.ic_motorcycle_rear
@@ -19,6 +20,9 @@ class LeanAngleView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var motorcycleIcon: Drawable? = null
     
+    // Smoothing factor for visual interpolation (0.0 to 1.0)
+    private val interpolationFactor = 0.15f
+
     companion object {
         const val MODE_LEAN = 0
         const val MODE_INCLINE = 1
@@ -48,12 +52,21 @@ class LeanAngleView @JvmOverloads constructor(
     }
 
     fun setAngle(newAngle: Float) {
-        this.angle = newAngle
+        this.targetAngle = newAngle
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        
+        // Visual smoothing: Interpolate currentAngle towards targetAngle
+        if (Math.abs(targetAngle - currentAngle) > 0.01f) {
+            currentAngle += (targetAngle - currentAngle) * interpolationFactor
+            postInvalidateOnAnimation()
+        } else {
+            currentAngle = targetAngle
+        }
+
         val centerX = width / 2f
         val centerY = height / 2f
         val radius = (Math.min(width, height) / 2f) * 0.8f
@@ -66,7 +79,7 @@ class LeanAngleView @JvmOverloads constructor(
 
         // Draw horizontal artificial horizon line
         canvas.save()
-        canvas.rotate(angle, centerX, centerY)
+        canvas.rotate(currentAngle, centerX, centerY)
         
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 3f
@@ -90,7 +103,6 @@ class LeanAngleView @JvmOverloads constructor(
         for (i in -60..60 step 10) {
             val tickAngle = i.toFloat()
             val startRadius = radius * 0.9f
-            val endRadius = radius
             
             val stopX = centerX + radius * Math.sin(Math.toRadians(tickAngle.toDouble())).toFloat()
             val stopY = centerY - radius * Math.cos(Math.toRadians(tickAngle.toDouble())).toFloat()
@@ -108,9 +120,9 @@ class LeanAngleView @JvmOverloads constructor(
         paint.textAlign = Paint.Align.CENTER
         
         val displayValue = if (showSign) {
-            angle.toInt().toString()
+            Math.round(currentAngle).toString()
         } else {
-            Math.abs(angle).toInt().toString()
+            Math.abs(Math.round(currentAngle)).toString()
         }
         
         canvas.drawText("${displayValue}°", centerX, centerY + radius * 0.7f, paint)

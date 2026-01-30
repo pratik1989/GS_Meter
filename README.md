@@ -1,7 +1,11 @@
-<img width="2238" height="1002" alt="image" src="https://github.com/user-attachments/assets/1ab7b109-3a31-4617-86f5-68a028027df5" />
-
-
 ### **🏍️ Motorcycle GPS Speedometer – BMW GS Style Dashboard (Android)**
+
+<img width="2138" height="958" alt="image" src="https://github.com/user-attachments/assets/af1e834e-990b-45d6-a0f6-b1f61719e6f1" />
+
+<img width="2136" height="962" alt="image" src="https://github.com/user-attachments/assets/d5cf3060-20cb-48b5-91aa-451a4cf8cac4" />
+
+<img width="2144" height="966" alt="image" src="https://github.com/user-attachments/assets/3fd10866-6429-445d-9379-f79ea2251c88" />
+
 
 A premium Android motorcycle dashboard application inspired by the iconic BMW GS instrument cluster.
 This app transforms your Android device into a full-featured riding companion with real-time GPS telemetry, lean and pitch visualization, weather intelligence, and media controls — all optimized for landscape motorcycle mounting.
@@ -43,6 +47,7 @@ This app transforms your Android device into a full-featured riding companion wi
 
 8. **Immersive Interface**
     - Fullscreen riding mode
+    - Mini Open Street Map showing current location
     - Clean BMW-themed typography
     - Optimized day and night visibility
     - Landscape-only layout for motorcycle mounts
