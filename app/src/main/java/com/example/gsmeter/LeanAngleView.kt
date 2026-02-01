@@ -20,8 +20,9 @@ class LeanAngleView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var motorcycleIcon: Drawable? = null
     
-    // Smoothing factor for visual interpolation (0.0 to 1.0)
-    private val interpolationFactor = 0.15f
+    // Visual damping factor for extremely smooth movement (0.0 to 1.0)
+    // 0.08 provides high damping to absorb micro-vibrations from motorcycle handlebars
+    private val damping = 0.08f
 
     companion object {
         const val MODE_LEAN = 0
@@ -59,9 +60,11 @@ class LeanAngleView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
-        // Visual smoothing: Interpolate currentAngle towards targetAngle
-        if (Math.abs(targetAngle - currentAngle) > 0.01f) {
-            currentAngle += (targetAngle - currentAngle) * interpolationFactor
+        // Layer 2: Visual Interpolation
+        // Smoothly move currentAngle towards targetAngle to eliminate flickering
+        val diff = targetAngle - currentAngle
+        if (Math.abs(diff) > 0.01f) {
+            currentAngle += diff * damping
             postInvalidateOnAnimation()
         } else {
             currentAngle = targetAngle
@@ -119,10 +122,12 @@ class LeanAngleView @JvmOverloads constructor(
         paint.textSize = 34f
         paint.textAlign = Paint.Align.CENTER
         
+        // Rounding to whole degrees prevents flickering of digits under vibration
+        val displayAngle = Math.round(currentAngle)
         val displayValue = if (showSign) {
-            Math.round(currentAngle).toString()
+            displayAngle.toString()
         } else {
-            Math.abs(Math.round(currentAngle)).toString()
+            Math.abs(displayAngle).toString()
         }
         
         canvas.drawText("${displayValue}°", centerX, centerY + radius * 0.7f, paint)
