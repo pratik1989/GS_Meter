@@ -20,9 +20,8 @@ class LeanAngleView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var motorcycleIcon: Drawable? = null
     
-    // Visual damping factor for extremely smooth movement (0.0 to 1.0)
-    // 0.08 provides high damping to absorb micro-vibrations from motorcycle handlebars
-    private val damping = 0.08f
+    // Visual damping factor for smooth transitions (0.0 to 1.0)
+    private val damping = 0.12f
 
     companion object {
         const val MODE_LEAN = 0
@@ -60,8 +59,7 @@ class LeanAngleView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
-        // Layer 2: Visual Interpolation
-        // Smoothly move currentAngle towards targetAngle to eliminate flickering
+        // Apply visual interpolation
         val diff = targetAngle - currentAngle
         if (Math.abs(diff) > 0.01f) {
             currentAngle += diff * damping
@@ -122,7 +120,10 @@ class LeanAngleView @JvmOverloads constructor(
         paint.textSize = 34f
         paint.textAlign = Paint.Align.CENTER
         
-        // Rounding to whole degrees prevents flickering of digits under vibration
+        // Correct display logic:
+        // Use Math.round() on the current interpolated angle.
+        // If showSign is true, we keep the sign (for Pitch).
+        // If showSign is false, we take Absolute Value (for Lean, which usually shows lean as a positive magnitude left or right).
         val displayAngle = Math.round(currentAngle)
         val displayValue = if (showSign) {
             displayAngle.toString()

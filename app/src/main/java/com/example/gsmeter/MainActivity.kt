@@ -1,64 +1,43 @@
 package com.example.gsmeter
 
-import android.Manifest
-import android.annotation.SuppressLint
 import android.app.admin.DevicePolicyManager
 import android.content.*
-import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.Paint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.location.Address
 import android.location.Geocoder
 import android.location.GnssStatus
 import android.location.Location
-import android.location.LocationListener
 import android.location.LocationManager
 import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.*
+import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
 import android.view.KeyEvent
-import android.view.Surface
 import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.cardview.widget.CardView
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.res.ResourcesCompat
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
-import kotlin.concurrent.thread
+import java.util.*
+import kotlin.math.*
 
-class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener {
+class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var tvSpeed: TextView
     private lateinit var tvUnit: TextView
@@ -105,94 +84,45 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private lateinit var btnZoomIn: ImageButton
     private lateinit var btnZoomOut: ImageButton
     private lateinit var mapView: MapView
+    private var locationMarker: Marker? = null
 
     private lateinit var forecastContainer: View
     private lateinit var statsWeatherRow: View
     private lateinit var gaugeContainer: View
 
-    private lateinit var locationManager: LocationManager
-    private lateinit var devicePolicyManager: DevicePolicyManager
-    private lateinit var adminComponent: ComponentName
-    
-    private lateinit var sensorManager: SensorManager
-    private var rotationSensor: Sensor? = null
-    
-    private val handler = Handler(Looper.getMainLooper())
-    private var lastLocation: Location? = null
+    private var locationManager: LocationManager? = null
     private var gpsService: GPSForegroundService? = null
     private var isBound = false
-    private var isStatusBarHidden = false
-    private var hasFetchedInitialWeather = false
-    private var isAutoLockEnabled = false
+    private val handler = Handler(Looper.getMainLooper())
     
-    private var maxSpeed: Float = 0f
-    private var speedSum: Double = 0.0
-    private var speedCount: Int = 0
-    private var totalDistance: Float = 0f
+    private var totalDistance = 0f
+    private var lastLocation: Location? = null
+    private var lastDataUpdateLocation: Location? = null
+    private var isCalibrated = false
+    private var basePitch = 0f
+    private var baseRoll = 0f
+    private var lastSyncTime: String? = null
+    private var isCurrentlyConnected = true
+
+    private var maxSpeedKph = 0f
+    private var avgSpeedKph = 0f
+    private var speedSamples = 0
+    private var totalSpeedSum = 0f
 
     private var useMilesPerHour = false
     private var useMetersAltitude = false
     private var useMilesDistance = false
-
-    private var currentMarker: Marker? = null
+    
     private var currentZoom = 15.0
 
-    // Smoothing variables
-    private var smoothedSpeed: Float = 0f
-    private val speedSmoothingFactor = 0.3f
+    private lateinit var sensorManager: SensorManager
+    private var rotationSensor: Sensor? = null
     
-    // Aggressive smoothing for motorcycle vibrations (0.0 to 1.0)
-    // Low value heavily filters high-frequency noise from engine/road vibrations
-    private val sensorSmoothingFactor = 0.06f
-
-    private var initialLean: Float = 0f
-    private var initialPitch: Float = 0f
-    private var rotationFactor: Float = 1f
-    private var isCalibrated = false
-    private var lastSyncTime: String? = null
-    private var isCurrentlyConnected = true
-
-    private var smoothedLean: Float = 0f
-    private var smoothedPitch: Float = 0f
-
-    private val batteryReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            intent?.let {
-                val level = it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-                val scale = it.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-                val batteryPct = level * 100 / scale.toFloat()
-                val status = it.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-                val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                                 status == BatteryManager.BATTERY_STATUS_FULL
-
-                runOnUiThread {
-                    tvBattery.text = "${batteryPct.toInt()}%"
-                    updateBatteryIcon(batteryPct.toInt(), isCharging)
-                }
-            }
-        }
-    }
-
-    private fun updateBatteryIcon(percentage: Int, isCharging: Boolean) {
-        val iconRes = when {
-            isCharging -> R.drawable.ic_battery_charging
-            percentage >= 75 -> R.drawable.ic_battery_full
-            percentage >= 50 -> R.drawable.ic_battery_4_bar
-            percentage >= 25 -> R.drawable.ic_battery_2_bar
-            else -> R.drawable.ic_battery_std
-        }
-        ivBattery.setImageResource(iconRes)
-        
-        // Color coding
-        val color = when {
-            isCharging -> Color.parseColor("#4CAF50") // Green
-            percentage <= 15 -> Color.parseColor("#F44336") // Red
-            percentage <= 30 -> Color.parseColor("#FF9800") // Orange
-            else -> Color.WHITE
-        }
-        ivBattery.setColorFilter(color)
-        tvBattery.setTextColor(color)
-    }
+    private lateinit var devicePolicyManager: DevicePolicyManager
+    private lateinit var adminComponent: ComponentName
+    private var isAutoLockEnabled = false
+    private var isWeatherLoading = false
+    private var lastWeatherFetchTime = 0L
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -224,7 +154,7 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     private val weatherRunnable = object : Runnable {
         override fun run() {
             fetchWeather()
-            handler.postDelayed(this, 900000L) // 15 mins
+            handler.postDelayed(this, 30000L) // 30 seconds
         }
     }
 
@@ -343,6 +273,12 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
 
         mapView.setMultiTouchControls(true)
         mapView.controller.setZoom(currentZoom)
+        
+        locationMarker = Marker(mapView).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            title = "Current Location"
+        }
+        mapView.overlays.add(locationMarker)
 
         // Lean uses rear view (banking), Pitch uses side view (incline)
         gaugeLean.setConfiguration("LEAN", false, R.drawable.ic_motorcycle_rear)
@@ -491,27 +427,22 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     }
 
     private fun updateMapLocation() {
-        val loc = lastLocation ?: return
-        val startPoint = GeoPoint(loc.latitude, loc.longitude)
-        
-        if (currentMarker == null) {
-            currentMarker = Marker(mapView)
-            currentMarker?.title = "Current Location"
-            mapView.overlays.add(currentMarker)
+        lastLocation?.let {
+            val point = GeoPoint(it.latitude, it.longitude)
+            mapView.controller.setCenter(point)
+            locationMarker?.position = point
+            mapView.invalidate()
         }
-        currentMarker?.position = startPoint
-        mapView.controller.animateTo(startPoint)
-        mapView.invalidate()
     }
 
     private fun showResetDistanceDialog() {
         AlertDialog.Builder(this)
-            .setTitle("Reset Distance")
-            .setMessage("Do you want to reset the total distance covered?")
+            .setTitle("Reset Total Distance")
+            .setMessage("Are you sure you want to reset the total distance traveled?")
             .setPositiveButton("Reset") { _, _ ->
                 totalDistance = 0f
+                getPreferences(Context.MODE_PRIVATE).edit().putFloat("total_distance", 0f).apply()
                 updateDistanceDisplay()
-                saveDistance()
                 Toast.makeText(this, "Distance Reset", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
@@ -519,44 +450,70 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
     }
 
     private fun updateDistanceDisplay() {
+        val displayDistance: Float
+        val unit: String
+        
         if (useMilesDistance) {
-            val distanceMiles = totalDistance * 0.621371f
-            tvDistance.text = String.format("Dist: %.2f mi", distanceMiles)
+            displayDistance = totalDistance * 0.000621371f
+            unit = "mi"
         } else {
-            tvDistance.text = String.format("Dist: %.2f km", totalDistance)
+            displayDistance = totalDistance / 1000f
+            unit = "km"
         }
+        
+        tvDistance.text = String.format("%.2f %s", displayDistance, unit)
     }
 
-    private fun saveDistance() {
-        getPreferences(Context.MODE_PRIVATE).edit().putFloat("total_distance", totalDistance).apply()
+    private fun isNetworkAvailable(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun startGpsService() {
+        val intent = Intent(this, GPSForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        
+        if (hasLocationPermission()) {
+            try {
+                locationManager?.registerGnssStatusCallback(gnssStatusCallback, null)
+            } catch (e: SecurityException) {
+                e.printStackTrace()
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        mapView.onResume()
-        if (hasLocationPermission()) {
-            if (!isBound) startGpsService()
-            checkLocationSettings()
+        rotationSensor?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
-        // Use GAME delay for vehicle dynamics + high-frequency filtering
-        rotationSensor?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
+        mapView.onResume()
     }
 
     override fun onPause() {
         super.onPause()
-        mapView.onPause()
         sensorManager.unregisterListener(this)
+        mapView.onPause()
     }
 
-    override fun onStop() {
-        super.onStop()
-        if (isAutoLockEnabled && !isChangingConfigurations && devicePolicyManager.isAdminActive(adminComponent)) {
-            try {
-                devicePolicyManager.lockNow()
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Failed to lock device: ${e.message}")
-            }
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
         }
+        try {
+            locationManager?.unregisterGnssStatusCallback(gnssStatusCallback)
+        } catch (e: Exception) {}
+        handler.removeCallbacksAndMessages(null)
+        unregisterReceiver(batteryReceiver)
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -566,351 +523,422 @@ class MainActivity : AppCompatActivity(), LocationListener, SensorEventListener 
             val orientation = FloatArray(3)
             SensorManager.getOrientation(rotationMatrix, orientation)
 
-            val pitch = Math.toDegrees(orientation[1].toDouble()).toFloat()
-            val roll = Math.toDegrees(orientation[2].toDouble()).toFloat()
+            var pitch = Math.toDegrees(orientation[1].toDouble()).toFloat()
+            var roll = Math.toDegrees(orientation[2].toDouble()).toFloat()
 
             if (!isCalibrated) {
-                initialPitch = pitch
-                initialLean = roll
-                smoothedPitch = 0f
-                smoothedLean = 0f
-                val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    display?.rotation ?: Surface.ROTATION_0
-                } else {
-                    @Suppress("DEPRECATION")
-                    windowManager.defaultDisplay.rotation
-                }
-                rotationFactor = if (rotation == Surface.ROTATION_270) -1f else 1f
+                basePitch = pitch
+                baseRoll = roll
                 isCalibrated = true
             }
 
-            val currentPitch = -(pitch - initialPitch) * rotationFactor
-            val currentLean = -(roll - initialLean) * rotationFactor
-            
-            // Aggressive Low Pass Filter for sensor readings to negate engine/road vibrations
-            smoothedPitch = (currentPitch * sensorSmoothingFactor) + (smoothedPitch * (1f - sensorSmoothingFactor))
-            smoothedLean = (currentLean * sensorSmoothingFactor) + (smoothedLean * (1f - sensorSmoothingFactor))
+            val calPitch = pitch - basePitch
+            val calRoll = roll - baseRoll
 
-            gaugeLean.setAngle(smoothedLean)
-            gaugePitch.setAngle(smoothedPitch)
+            // Lean (Roll) - how much the bike is leaning sideways
+            gaugeLean.setAngle(calRoll)
+            // Pitch - how much the bike is tilting forward/backward
+            gaugePitch.setAngle(calPitch)
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    @SuppressLint("MissingPermission")
-    private fun startGpsService() {
-        val serviceIntent = Intent(this, GPSForegroundService::class.java)
-        ContextCompat.startForegroundService(this, serviceIntent)
-        bindService(serviceIntent, serviceConnection, BIND_AUTO_CREATE)
-        try {
-            locationManager.registerGnssStatusCallback(gnssStatusCallback, handler)
-        } catch (e: Exception) {}
-    }
-
-    private fun hasLocationPermission(): Boolean = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
-    private fun checkAndRequestPermissions() {
-        if (!hasLocationPermission()) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1001)
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1001 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            btnPermissions.visibility = View.GONE
-            startGpsService()
-        }
-    }
-
-    override fun onLocationChanged(location: Location) {
-        if (lastLocation != null) {
-            val distance = lastLocation!!.distanceTo(location)
-            if (location.accuracy < 25 && distance > 1.0) {
-                totalDistance += distance / 1000f
+    private fun onLocationChanged(location: Location) {
+        val isFirstLocation = lastLocation == null
+        
+        lastLocation?.let {
+            val distance = it.distanceTo(location)
+            if (location.accuracy < 25) {
+                totalDistance += distance
+                getPreferences(Context.MODE_PRIVATE).edit().putFloat("total_distance", totalDistance).apply()
                 updateDistanceDisplay()
-                saveDistance()
             }
         }
+        
         lastLocation = location
         
-        val rawSpeedKmh = location.speed * 3.6f
-        
-        smoothedSpeed = (rawSpeedKmh * speedSmoothingFactor) + (smoothedSpeed * (1f - speedSmoothingFactor))
-        val displaySpeedKmh = if (smoothedSpeed < 1.0f) 0f else smoothedSpeed
-        
-        if (useMilesPerHour) {
-            val speedMph = displaySpeedKmh * 0.621371f
-            tvSpeed.text = String.format("%.0f", speedMph)
-            tvUnit.text = "mi/h"
-        } else {
-            tvSpeed.text = String.format("%.0f", displaySpeedKmh)
-            tvUnit.text = "km/h"
-        }
-        gsMeterView.setSpeed(displaySpeedKmh)
-        
-        if (useMetersAltitude) {
-            tvAltitude.text = String.format("%.0f m", location.altitude)
-        } else {
-            val altitudeFeet = location.altitude * 3.28084
-            tvAltitude.text = String.format("%.0f ft", altitudeFeet)
-        }
-
-        if (displaySpeedKmh > 5.0f) tvHeading.text = getCompassDirection(location.bearing)
-        
-        if (displaySpeedKmh > 1.0) {
-            if (displaySpeedKmh > maxSpeed) {
-                maxSpeed = displaySpeedKmh
-                tvMaxSpeed.text = String.format("Max: %.0f km/h", maxSpeed)
-            }
-            speedSum += displaySpeedKmh
-            speedCount++
-            tvAvgSpeed.text = String.format("Avg: %.0f km/h", speedSum / speedCount)
-        }
-
-        if (!hasFetchedInitialWeather) {
+        // Force update location and weather if moved significantly (e.g., > 500m) or first time
+        val distanceSinceLastUpdate = lastDataUpdateLocation?.distanceTo(location) ?: Float.MAX_VALUE
+        if (isFirstLocation || tvTemp.text == "--°C" || distanceSinceLastUpdate > 500f) {
+            updateLocationName(location)
             fetchWeather()
-            hasFetchedInitialWeather = true
+            lastDataUpdateLocation = location
         }
-        updateLocationName(location)
-        if (mapOverlayContainer.visibility == View.VISIBLE) updateMapLocation()
+
+        val speedKph = location.speed * 3.6f
+        
+        // Update stats
+        if (speedKph > maxSpeedKph) maxSpeedKph = speedKph
+        totalSpeedSum += speedKph
+        speedSamples++
+        avgSpeedKph = totalSpeedSum / speedSamples
+
+        val displaySpeed: Float
+        val unit: String
+        val lowerUnit: String
+        if (useMilesPerHour) {
+            displaySpeed = speedKph * 0.621371f
+            unit = "MPH"
+            lowerUnit = "mph"
+        } else {
+            displaySpeed = speedKph
+            unit = "KM/H"
+            lowerUnit = "km/h"
+        }
+
+        tvSpeed.text = if (speedKph < 1) "0" else speedKph.roundToInt().toString()
+        tvUnit.text = unit
+        
+        val displayAvg: Float
+        val displayMax: Float
+        if (useMilesPerHour) {
+            displayAvg = avgSpeedKph * 0.621371f
+            displayMax = maxSpeedKph * 0.621371f
+        } else {
+            displayAvg = avgSpeedKph
+            displayMax = maxSpeedKph
+        }
+        
+        tvAvgSpeed.text = String.format("Avg: %.1f %s", displayAvg, lowerUnit)
+        tvMaxSpeed.text = String.format("Max: %.1f %s", displayMax, lowerUnit)
+
+        val displayAlt: Double
+        val altUnit: String
+        if (useMetersAltitude) {
+            displayAlt = location.altitude
+            altUnit = "m"
+        } else {
+            displayAlt = location.altitude * 3.28084
+            altUnit = "ft"
+        }
+        tvAltitude.text = String.format("%.0f %s", displayAlt, altUnit)
+
+        tvHeading.text = getCardinalDirection(location.bearing)
+        gsMeterView.setSpeed(speedKph)
+        
+        if (mapOverlayContainer.visibility == View.VISIBLE) {
+            updateMapLocation()
+        }
+
+        if (isNetworkAvailable() && (tvLocation.text == "Locating..." || tvLocation.text == "Unknown Location")) {
+            updateLocationName(location)
+        } else if (!isNetworkAvailable()) {
+            val offlineName = OfflineGeocoder(this).getNearestCity(location.latitude, location.longitude)
+            if (offlineName != null) {
+                tvLocation.text = if (offlineName.state.isNotEmpty()) "${offlineName.name}, ${offlineName.state}" else offlineName.name
+                tvCountry.text = offlineName.country
+            }
+        }
+    }
+
+    private fun getCardinalDirection(bearing: Float): String {
+        val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW", "N")
+        return directions[((bearing % 360) / 45).roundToInt()]
     }
 
     private fun updateLocationName(location: Location) {
-        thread {
+        Thread {
             try {
                 val geocoder = Geocoder(this, Locale.getDefault())
-                val addresses: List<Address>? = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                if (!addresses.isNullOrEmpty()) {
+                val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                
+                if (addresses != null && addresses.isNotEmpty()) {
                     val address = addresses[0]
-                    val city = address.locality ?: address.subAdminArea ?: "Unknown"
+                    val city = address.locality ?: address.subLocality ?: address.subAdminArea ?: ""
                     val state = address.adminArea ?: ""
                     val country = address.countryName ?: ""
+
                     runOnUiThread {
-                        tvLocation.text = if (state.isNotEmpty()) "$city, $state" else city
+                        if (city.isNotEmpty()) {
+                            tvLocation.text = if (state.isNotEmpty()) "$city, $state" else city
+                        } else if (state.isNotEmpty()) {
+                            tvLocation.text = state
+                        } else {
+                            tvLocation.text = "Unknown Location"
+                        }
+                        tvCountry.text = country
+                    }
+                } else {
+                    val url = URL("https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&zoom=10&addressdetails=1")
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.setRequestProperty("User-Agent", "GSMeterApp")
+                    val text = conn.inputStream.bufferedReader().readText()
+                    val json = JSONObject(text)
+                    val addressJson = json.getJSONObject("address")
+                    
+                    val name = addressJson.optString("city", 
+                               addressJson.optString("town", 
+                               addressJson.optString("village", 
+                               addressJson.optString("hamlet", 
+                               addressJson.optString("suburb", "")))))
+                    
+                    val state = addressJson.optString("state", "")
+                    val country = addressJson.optString("country", "")
+
+                    runOnUiThread {
+                        if (name.isNotEmpty()) {
+                            tvLocation.text = if (state.isNotEmpty()) "$name, $state" else name
+                        } else if (state.isNotEmpty()) {
+                            tvLocation.text = state
+                        } else {
+                            tvLocation.text = "Unknown Location"
+                        }
                         tvCountry.text = country
                     }
                 }
-            } catch (e: Exception) {}
-        }
-    }
-
-    private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val nw = connectivityManager.activeNetwork ?: return false
-        val actNw = connectivityManager.getNetworkCapabilities(nw) ?: return false
-        return actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+            } catch (e: Exception) {
+                Log.e("GSMeter", "Error updating location name", e)
+            }
+        }.start()
     }
 
     private fun fetchWeather() {
         val loc = lastLocation ?: return
-        if (!isNetworkAvailable()) return
-        thread {
+        val currentTime = System.currentTimeMillis()
+        if (isWeatherLoading || (currentTime - lastWeatherFetchTime < 25000)) return
+        
+        Log.d("GSMeter", "Fetching weather for: ${loc.latitude}, ${loc.longitude}")
+        
+        isWeatherLoading = true
+        Thread {
             try {
-                val urlString = "https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code&forecast_days=2&timezone=auto"
-                val url = URL(urlString)
-                val connection = url.openConnection() as HttpURLConnection
-                if (connection.responseCode == 200) {
-                    val response = connection.inputStream.bufferedReader().readText()
-                    val json = JSONObject(response)
-                    
-                    val current = json.getJSONObject("current")
-                    val currentTemp = current.getDouble("temperature_2m")
-                    val currentWeatherCode = current.getInt("weather_code")
-                    
-                    val hourly = json.getJSONObject("hourly")
-                    val hourlyTemps = hourly.getJSONArray("temperature_2m")
-                    val hourlyCodes = hourly.getJSONArray("weather_code")
-                    val hourlyTimes = hourly.getJSONArray("time")
-                    
-                    val nowMs = System.currentTimeMillis()
-                    val timeParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.getDefault())
-                    
-                    var startIndex = -1
-                    for (i in 0 until hourlyTimes.length()) {
-                        val timeStr = hourlyTimes.getString(i)
-                        val timeMs = timeParser.parse(timeStr)?.time ?: 0L
-                        if (timeMs > nowMs) {
-                            startIndex = i
-                            break
-                        }
-                    }
-                    if (startIndex == -1) startIndex = 0
-
-                    val forecastData = mutableListOf<ForecastItem>()
-                    val outputFormat = SimpleDateFormat("h a", Locale.getDefault())
-
-                    for (i in startIndex until (startIndex + 5)) {
-                        if (i < hourlyTemps.length()) {
-                            val timeStr = hourlyTimes.getString(i)
-                            val date = timeParser.parse(timeStr)
-                            forecastData.add(ForecastItem(
-                                time = outputFormat.format(date!!),
-                                temp = hourlyTemps.getDouble(i).toInt(),
-                                code = hourlyCodes.getInt(i)
-                            ))
-                        }
-                    }
-
-                    runOnUiThread {
-                        tvTemp.text = String.format("%.0f°C", currentTemp)
-                        tvWeather.text = getWeatherDescription(currentWeatherCode)
-                        tvOfflineStatus.visibility = View.GONE
-                        val now = Calendar.getInstance()
-                        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-                        lastSyncTime = timeFormat.format(now.time)
-                        updateForecastUI(forecastData)
+                // Primary: Open-Meteo (No key required, highly reliable)
+                if (fetchWeatherOpenMeteo(loc.latitude, loc.longitude)) {
+                    lastWeatherFetchTime = System.currentTimeMillis()
+                } else {
+                    // Fallback: WeatherAPI (Using your key)
+                    val apiKey = "b67e8832a7684617a80112652251401"
+                    if (fetchWeatherFromAPI(apiKey, "${loc.latitude},${loc.longitude}")) {
+                        lastWeatherFetchTime = System.currentTimeMillis()
                     }
                 }
-            } catch (e: Exception) {}
-        }
+            } finally {
+                isWeatherLoading = false
+            }
+        }.start()
     }
 
-    private fun updateForecastUI(forecast: List<ForecastItem>) {
-        forecastItemsHolder.removeAllViews()
-        for ((index, item) in forecast.withIndex()) {
-            if (index > 0) {
-                val separator = View(this).apply {
-                    val params = LinearLayout.LayoutParams(dpToPx(1), LinearLayout.LayoutParams.MATCH_PARENT)
-                    params.setMargins(0, dpToPx(8), 0, dpToPx(8))
-                    layoutParams = params
-                    setBackgroundColor(Color.parseColor("#40FFFFFF"))
+    private fun fetchWeatherOpenMeteo(lat: Double, lon: Double): Boolean {
+        try {
+            val urlString = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current_weather=true&hourly=temperature_2m,weathercode&forecast_days=1"
+            val url = URL(urlString)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 10000
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(text)
+                val current = json.getJSONObject("current_weather")
+                val tempC = current.getDouble("temperature")
+                val condition = getWeatherConditionFromCode(current.getInt("weathercode"))
+                
+                val hourly = json.getJSONObject("hourly")
+                val times = hourly.getJSONArray("time")
+                val temps = hourly.getJSONArray("temperature_2m")
+                val codes = hourly.getJSONArray("weathercode")
+                
+                val now = Calendar.getInstance()
+                val currentHourStr = SimpleDateFormat("yyyy-MM-dd'T'HH:00", Locale.US).format(now.time)
+                
+                var startIndex = 0
+                for (i in 0 until times.length()) {
+                    if (times.getString(i) == currentHourStr) {
+                        startIndex = i + 1
+                        break
+                    }
                 }
-                forecastItemsHolder.addView(separator)
-            }
+                
+                val forecastData = mutableListOf<ForecastItem>()
+                for (i in startIndex until Math.min(startIndex + 5, times.length())) {
+                    val timeStr = times.getString(i)
+                    val hour = timeStr.substring(11, 13).toInt()
+                    val cal = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0) }
+                    forecastData.add(ForecastItem(SimpleDateFormat("h a", Locale.getDefault()).format(cal.time), temps.getDouble(i).toInt(), getWeatherConditionFromCode(codes.getInt(i))))
+                }
 
-            val itemView = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dpToPx(6), 0, dpToPx(6), 0)
+                runOnUiThread {
+                    tvTemp.text = "${tempC.toInt()}°C"
+                    tvWeather.text = condition
+                    updateForecastUi(forecastData)
+                    lastSyncTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+                }
+                return true
             }
-
-            val tvTimeItem = TextView(this).apply {
-                text = item.time
-                setTextColor(Color.WHITE)
-                setTextSize(10f)
-                gravity = Gravity.CENTER
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.bmw_font_bold)
-            }
-
-            val tvTempItem = TextView(this).apply {
-                text = "${item.temp}°"
-                setTextColor(Color.WHITE)
-                setTextSize(12f)
-                gravity = Gravity.CENTER
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.bmw_font_bold)
-            }
-            
-            val tvDesc = TextView(this).apply {
-                text = getWeatherShortDescription(item.code)
-                setTextColor(Color.parseColor("#3DBCDB"))
-                setTextSize(8f)
-                gravity = Gravity.CENTER
-                typeface = ResourcesCompat.getFont(this@MainActivity, R.font.bmw_font_bold)
-            }
-
-            itemView.addView(tvTimeItem)
-            itemView.addView(tvTempItem)
-            itemView.addView(tvDesc)
-            forecastItemsHolder.addView(itemView)
-        }
+        } catch (e: Exception) { Log.e("GSMeter", "Open-Meteo Error", e) }
+        return false
     }
 
-    private data class ForecastItem(val time: String, val temp: Int, val code: Int)
-    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+    private fun fetchWeatherFromAPI(apiKey: String, query: String): Boolean {
+        try {
+            val urlString = "https://api.weatherapi.com/v1/forecast.json?key=$apiKey&q=${Uri.encode(query)}&days=1&aqi=no&alerts=no"
+            val url = URL(urlString)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 10000
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(text)
+                val current = json.getJSONObject("current")
+                val tempC = current.getDouble("temp_c")
+                val condition = getWeatherConditionFromCodeSimplified(current.getJSONObject("condition").getString("text"))
+                
+                val forecast = json.getJSONObject("forecast").getJSONArray("forecastday").getJSONObject(0)
+                val hourArray = forecast.getJSONArray("hour")
+                val now = Calendar.getInstance()
+                val currentHour = now.get(Calendar.HOUR_OF_DAY)
+                
+                val forecastData = mutableListOf<ForecastItem>()
+                for (i in 1..5) {
+                    val nextHour = (currentHour + i) % 24
+                    val hourObj = hourArray.getJSONObject(nextHour)
+                    val cal = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, nextHour); set(Calendar.MINUTE, 0) }
+                    forecastData.add(ForecastItem(SimpleDateFormat("h a", Locale.getDefault()).format(cal.time), hourObj.getDouble("temp_c").toInt(), getWeatherConditionFromCodeSimplified(hourObj.getJSONObject("condition").getString("text"))))
+                }
 
-    private fun getWeatherDescription(code: Int): String {
-        return when (code) {
-            0 -> "Clear sky"
-            1, 2, 3 -> "Partly cloudy"
-            45, 48 -> "Fog"
-            51, 53, 55 -> "Drizzle"
-            61, 63, 65 -> "Rain"
-            71, 73, 75 -> "Snow fall"
-            80, 81, 82 -> "Rain showers"
-            95, 96, 99 -> "Thunderstorm"
-            else -> "Cloudy"
-        }
+                runOnUiThread {
+                    tvTemp.text = "${tempC.toInt()}°C"
+                    tvWeather.text = condition
+                    updateForecastUi(forecastData)
+                    lastSyncTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
+                }
+                return true
+            }
+        } catch (e: Exception) { Log.e("GSMeter", "WeatherAPI Error", e) }
+        return false
     }
-    
-    private fun getWeatherShortDescription(code: Int): String {
+
+    private fun getWeatherConditionFromCode(code: Int): String {
         return when (code) {
             0 -> "Clear"
-            1, 2, 3 -> "Cloudy"
+            1, 2, 3 -> "Clear"
             45, 48 -> "Fog"
             51, 53, 55 -> "Drizzle"
             61, 63, 65 -> "Rain"
             71, 73, 75 -> "Snow"
             80, 81, 82 -> "Showers"
             95, 96, 99 -> "Storm"
-            else -> "Cloud"
+            else -> "Cloudy"
         }
     }
 
-    private fun getCompassDirection(bearing: Float): String {
-        val directions = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-        return directions[((bearing + 22.5) / 45).toInt() % 8]
+    private fun getWeatherConditionFromCodeSimplified(conditionText: String): String {
+        val lowerText = conditionText.lowercase()
+        return when {
+            lowerText.contains("clear") || lowerText.contains("sunny") -> "Clear"
+            lowerText.contains("fog") || lowerText.contains("mist") -> "Fog"
+            lowerText.contains("rain") || lowerText.contains("drizzle") -> "Rain"
+            lowerText.contains("shower") -> "Showers"
+            lowerText.contains("storm") || lowerText.contains("thunder") -> "Storm"
+            lowerText.contains("snow") || lowerText.contains("sleet") || lowerText.contains("ice") -> "Snow"
+            lowerText.contains("cloud") || lowerText.contains("overcast") -> "Cloudy"
+            else -> "Cloudy"
+        }
     }
 
-    private fun toggleStatusBar() { if (isStatusBarHidden) showStatusBar() else hideStatusBar() }
+    private fun updateForecastUi(items: List<ForecastItem>) {
+        forecastItemsHolder.removeAllViews()
+        for (index in items.indices) {
+            val item = items[index]
+            val view = layoutInflater.inflate(R.layout.item_forecast, forecastItemsHolder, false)
+            view.findViewById<TextView>(R.id.tv_forecast_time).text = item.time
+            view.findViewById<TextView>(R.id.tv_forecast_temp).text = "${item.temp}°"
+            view.findViewById<TextView>(R.id.tv_forecast_cond).text = item.condition
+            forecastItemsHolder.addView(view)
+            
+            // Add separator if it's not the last item
+            if (index < items.size - 1) {
+                val separator = View(this)
+                val params = LinearLayout.LayoutParams(1, LinearLayout.LayoutParams.MATCH_PARENT)
+                params.setMargins(4, 8, 4, 8)
+                separator.layoutParams = params
+                separator.setBackgroundColor(Color.parseColor("#40FFFFFF"))
+                forecastItemsHolder.addView(separator)
+            }
+        }
+    }
+
+    data class ForecastItem(val time: String, val temp: Int, val condition: String)
+
+    private fun hasLocationPermission() = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun checkAndRequestPermissions() {
+        if (!hasLocationPermission()) {
+            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), 1001)
+        }
+    }
 
     private fun hideStatusBar() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-            window.insetsController?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-            window.insetsController?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-        isStatusBarHidden = true
+        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN 
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION 
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
     }
 
-    private fun showStatusBar() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(true)
-            window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+    private fun toggleStatusBar() {
+        val isHidden = (window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_FULLSCREEN) != 0
+        if (isHidden) {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        } else {
+            hideStatusBar()
         }
-        isStatusBarHidden = false
     }
 
     private fun sendMediaButtonEvent(keyCode: Int) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val eventTime = SystemClock.uptimeMillis()
-        audioManager.dispatchMediaKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0))
-        audioManager.dispatchMediaKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0))
+        val eventDown = KeyEvent(KeyEvent.ACTION_DOWN, keyCode)
+        val eventUp = KeyEvent(KeyEvent.ACTION_UP, keyCode)
+        audioManager.dispatchMediaKeyEvent(eventDown)
+        audioManager.dispatchMediaKeyEvent(eventUp)
     }
 
     private fun updatePlayPauseIcon() {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        btnMediaPlayPause.setImageResource(if (audioManager.isMusicActive) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+        if (audioManager.isMusicActive) {
+            btnMediaPlayPause.setImageResource(android.R.drawable.ic_media_pause)
+        } else {
+            btnMediaPlayPause.setImageResource(android.R.drawable.ic_media_play)
+        }
     }
 
     private fun openYouTubeMusic() {
-        val intent = packageManager.getLaunchIntentForPackage("com.google.android.apps.youtube.music")
-        if (intent != null) startActivity(intent)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://music.youtube.com"))
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "YouTube Music not found", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun openUrl(url: String) {
-        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) {}
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
     private fun requestDeviceAdmin() {
         if (!devicePolicyManager.isAdminActive(adminComponent)) {
             val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
             intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+            intent.putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Auto-lock feature requires Device Admin permission to turn off the screen.")
             startActivity(intent)
         }
     }
 
-    private fun checkLocationSettings() {
-        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            Toast.makeText(this, "Enable GPS for accuracy", Toast.LENGTH_LONG).show()
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+            
+            val batteryPct = level * 100 / scale.toFloat()
+            tvBattery.text = "${batteryPct.toInt()}%"
+            
+            val iconRes = when {
+                isCharging -> R.drawable.ic_battery_charging
+                batteryPct > 90 -> R.drawable.ic_battery_full
+                batteryPct > 50 -> R.drawable.ic_battery_full // Changed from ic_battery_half which was missing
+                batteryPct > 20 -> R.drawable.ic_battery_full // Changed from ic_battery_low which was missing
+                else -> R.drawable.ic_battery_full // Changed from ic_battery_low which was missing
+            }
+            ivBattery.setImageResource(iconRes)
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (isBound) unbindService(serviceConnection)
-        unregisterReceiver(batteryReceiver)
-        handler.removeCallbacksAndMessages(null)
     }
 }
